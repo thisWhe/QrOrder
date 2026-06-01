@@ -19,7 +19,7 @@ namespace QrOrder.Web.Seed
 
             await db.Database.MigrateAsync();
 
-            foreach (var role in new[] { "Admin", "Kitchen", "Service" })
+            foreach (var role in new[] { "SuperAdmin", "Admin", "Kitchen", "Service" })
             {
                 if (!await roleManager.RoleExistsAsync(role))
                     await roleManager.CreateAsync(new IdentityRole<Guid>(role));
@@ -27,6 +27,25 @@ namespace QrOrder.Web.Seed
 
             if (!seedDemoData)
                 return;
+
+            var platformTenant = await db.Tenants.FirstOrDefaultAsync(t => t.Slug == "platform");
+            if (platformTenant == null)
+            {
+                platformTenant = new Tenant
+                {
+                    Name = "Platform",
+                    Slug = "platform",
+                    IsActive = true,
+                    IsOrderingEnabled = false,
+                    TableSessionHours = 12
+                };
+
+                db.Tenants.Add(platformTenant);
+                await db.SaveChangesAsync();
+            }
+
+            tenantContext.TenantId = platformTenant.Id;
+            await EnsureStaffUserAsync(userManager, platformTenant.Id, "superadmin@demo.com", "SuperAdmin123!", "SuperAdmin");
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Slug == "demo-cafe");
             if (tenant == null)
