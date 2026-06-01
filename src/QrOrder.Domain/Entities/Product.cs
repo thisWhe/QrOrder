@@ -1,0 +1,25 @@
+﻿using QrOrder.Domain.Abstractions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace QrOrder.Domain.Entities
+{
+    public class Product : ITenantEntity
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid TenantId { get; set; }
+
+        public Guid CategoryId { get; set; }
+        public Category Category { get; set; } = default!;
+
+        public string Name { get; set; } = default!;
+        public string? Description { get; set; }
+        public decimal Price { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool IsAvailable { get; set; } = true;
+    }
+}

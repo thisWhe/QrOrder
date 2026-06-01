@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs
+logs/
+*.log
+
+# Local configuration / secrets
+src/QrOrder.Web/appsettings.Development.json
+src/QrOrder.Web/appsettings.Local.json
+*.Development.json
+*.Local.json
+.env
+
+# Local test/scaffold projects not part of the main solution
+TestApi/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

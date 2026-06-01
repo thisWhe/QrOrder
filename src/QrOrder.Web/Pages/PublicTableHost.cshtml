@@ -1,0 +1,25 @@
+@page "/v/{tenantSlug}/t/{tableCode}"
+@{
+    var tenantSlug = RouteData.Values["tenantSlug"]?.ToString() ?? "";
+    var tableCode = RouteData.Values["tableCode"]?.ToString() ?? "";
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@tenantSlug - Menu</title>
+    <link rel="stylesheet" href="~/css/publicTable.css?v=20260531-1" />
+</head>
+<body>
+    <div id="public-table-app"
+         data-tenant-slug="@tenantSlug"
+         data-table-code="@tableCode">
+        <h3>@tenantSlug - Masa</h3>
+        <p>Yukleniyor...</p>
+    </div>
+
+    <script src="~/js/publicTable.js?v=20260531-1"></script>
+</body>
+</html>
