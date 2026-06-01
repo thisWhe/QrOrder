@@ -1,23 +1,26 @@
-# QR Order Management System
+# QR Sipariş Yönetim Sistemi
 
-QR Order is a multi-tenant restaurant ordering system built with ASP.NET Core and MSSQL. Customers scan a table-specific QR code, open the public menu, place orders, call service staff, and follow order status in real time. Staff members use separate kitchen and service screens, while admins manage menu data, tables, QR links, users, settings, reports, and service call history.
+QR Sipariş Yönetim Sistemi, restoran ve kafe işletmeleri için geliştirilmiş çoklu işletme destekli bir sipariş yönetim uygulamasıdır. Müşteriler masaya özel QR kodu okutarak menüye ulaşabilir, sipariş oluşturabilir, garson çağırabilir ve sipariş durumunu gerçek zamanlı takip edebilir. Mutfak, servis ve admin ekranları ayrı rollerle yönetilir.
 
-## Features
+## Özellikler
 
-- Multi-tenant restaurant structure
-- Table-specific QR menu access
-- Public mobile-first menu page
-- Cart and customer order note support
-- Real-time order notifications with SignalR
-- Kitchen dashboard for new/preparing orders
-- Service dashboard for ready orders and waiter calls
-- Customer service call flow
-- Admin panel for products, categories, tables, users, settings, orders, and reports
-- JWT authentication and role-based authorization
-- EF Core migrations with MSSQL
-- N-Tier architecture
+- Çoklu işletme mimarisi
+- Masaya özel QR menü erişimi
+- Mobil öncelikli müşteri menüsü
+- Sepet ve müşteri sipariş notu desteği
+- SignalR ile gerçek zamanlı sipariş bildirimi
+- Mutfak ekranında yeni ve hazırlanan siparişlerin takibi
+- Servis ekranında hazır siparişler ve garson çağrıları
+- Müşterinin garson çağırabilmesi
+- Admin panel üzerinden ürün, kategori, masa, kullanıcı ve işletme ayarları yönetimi
+- Sipariş raporu ve servis çağrısı geçmişi
+- JWT ile kimlik doğrulama
+- Rol bazlı yetkilendirme: Admin, Kitchen, Service
+- EF Core migration yapısı
+- MSSQL veritabanı
+- N-Tier katmanlı mimari
 
-## Tech Stack
+## Kullanılan Teknolojiler
 
 - ASP.NET Core 9
 - Entity Framework Core
@@ -29,62 +32,62 @@ QR Order is a multi-tenant restaurant ordering system built with ASP.NET Core an
 - Vanilla JavaScript
 - CSS
 
-## Project Structure
+## Proje Yapısı
 
 ```text
 src/
-  QrOrder.Domain/          Domain entities and enums
-  QrOrder.Application/     Application contracts and DTOs
-  QrOrder.Infrastructure/  EF Core, Identity, services, migrations
-  QrOrder.Web/             API controllers, pages, SignalR hubs, UI assets
+  QrOrder.Domain/          Entity ve enum sınıfları
+  QrOrder.Application/     DTO, interface ve uygulama sözleşmeleri
+  QrOrder.Infrastructure/  EF Core, Identity, servisler ve migration dosyaları
+  QrOrder.Web/             API controller, Razor Pages, SignalR hub ve arayüz dosyaları
 ```
 
-## Main Pages
+## Ana Ekranlar
 
 ```text
 Admin panel:
 http://localhost:5140/staff/admin
 
-Kitchen screen:
+Mutfak ekranı:
 http://localhost:5140/staff/kitchen
 
-Service screen:
+Servis ekranı:
 http://localhost:5140/staff/service
 
-Example customer QR menu:
+Örnek müşteri QR menüsü:
 http://localhost:5140/v/demo-cafe/t/84222936215c466d98c512d3d50947ed
 ```
 
-## Demo Users
+## Demo Kullanıcılar
 
 ```text
-Tenant: demo-cafe
+İşletme: demo-cafe
 
 Admin:
 admin@demo.com / Admin123!
 
-Kitchen:
+Mutfak:
 kitchen@demo.com / Kitchen123!
 
-Service:
+Servis:
 service@demo.com / Service123!
 ```
 
-## Local Setup
+## Kurulum
 
-1. Open the solution:
+1. Solution dosyasını açın:
 
 ```text
 QrOrder.sln
 ```
 
-2. Configure local development settings in:
+2. Lokal geliştirme ayarlarını şu dosyada yapılandırın:
 
 ```text
 src/QrOrder.Web/appsettings.Development.json
 ```
 
-Example:
+Örnek:
 
 ```json
 {
@@ -95,7 +98,7 @@ Example:
   "Jwt": {
     "Issuer": "QrOrder",
     "Audience": "QrOrderStaff",
-    "Key": "your-local-development-secret-key"
+    "Key": "local-development-secret-key"
   },
   "Seed": {
     "DemoData": true
@@ -103,15 +106,16 @@ Example:
 }
 ```
 
-3. Run the application:
+3. Uygulamayı çalıştırın:
 
 ```powershell
 dotnet run --project src\QrOrder.Web\QrOrder.Web.csproj --launch-profile http
 ```
 
-EF Core migrations are applied automatically on startup in the current development setup.
+Geliştirme ortamında EF Core migration dosyaları uygulama açılışında otomatik olarak uygulanır.
 
-## Notes
+## Notlar
 
-- `appsettings.Development.json`, `bin`, `obj`, `.vs`, `logs`, and local test projects are intentionally ignored.
-- Use a strong JWT key and a production SQL Server connection string outside source control for production deployments.
+- `appsettings.Development.json`, `bin`, `obj`, `.vs`, `logs` ve lokal test projeleri Git dışında bırakılmıştır.
+- Production ortamında güçlü bir JWT key ve gerçek SQL Server bağlantı bilgisi source control dışında tutulmalıdır.
+- Demo veriler geliştirme ortamında otomatik oluşturulur.
