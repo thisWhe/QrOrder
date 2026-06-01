@@ -73,49 +73,6 @@ Servis:
 service@demo.com / Service123!
 ```
 
-## Kurulum
-
-1. Solution dosyasını açın:
-
-```text
-QrOrder.sln
-```
-
-2. Lokal geliştirme ayarlarını şu dosyada yapılandırın:
-
-```text
-src/QrOrder.Web/appsettings.Development.json
-```
-
-Örnek:
-
-```json
-{
-  "PublicBaseUrl": "http://localhost:5140",
-  "ConnectionStrings": {
-    "Default": "Server=localhost\\SQLEXPRESS;Database=QrOrderDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Encrypt=False"
-  },
-  "Jwt": {
-    "Issuer": "QrOrder",
-    "Audience": "QrOrderStaff",
-    "Key": "local-development-secret-key"
-  },
-  "Seed": {
-    "DemoData": true
-  }
-}
-```
-
-3. Uygulamayı çalıştırın:
-
-```powershell
-dotnet run --project src\QrOrder.Web\QrOrder.Web.csproj --launch-profile http
-```
-
-Geliştirme ortamında EF Core migration dosyaları uygulama açılışında otomatik olarak uygulanır.
 
 ## Notlar
-
-- `appsettings.Development.json`, `bin`, `obj`, `.vs`, `logs` ve lokal test projeleri Git dışında bırakılmıştır.
-- Production ortamında güçlü bir JWT key ve gerçek SQL Server bağlantı bilgisi source control dışında tutulmalıdır.
 - Demo veriler geliştirme ortamında otomatik oluşturulur.
