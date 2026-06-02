@@ -100,6 +100,17 @@ button {
     flex-wrap: wrap;
 }
 
+.form-section-title {
+    margin: 18px 0 12px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.form-section-title strong {
+    display: block;
+    font-size: 16px;
+}
+
 .tabs {
     display: flex;
     gap: 8px;

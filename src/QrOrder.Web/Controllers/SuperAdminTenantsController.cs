@@ -31,13 +31,19 @@ namespace QrOrder.Web.Controllers
             int TableSessionHours,
             DateTimeOffset CreatedAt,
             int UserCount,
+            int TableCount,
             List<string> AdminEmails);
 
         public record CreateTenantReq(
             string Name,
             string Slug,
             string AdminEmail,
-            string AdminPassword);
+            string AdminPassword,
+            int TableCount = 0,
+            string? KitchenEmail = null,
+            string? KitchenPassword = null,
+            string? ServiceEmail = null,
+            string? ServicePassword = null);
 
         public record UpdateTenantStatusReq(bool IsActive);
 
@@ -52,6 +58,12 @@ namespace QrOrder.Web.Controllers
             var users = await _users.Users
                 .IgnoreQueryFilters()
                 .ToListAsync();
+
+            var tableCounts = await _db.Tables
+                .IgnoreQueryFilters()
+                .GroupBy(t => t.TenantId)
+                .Select(g => new { TenantId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.TenantId, x => x.Count);
 
             var result = new List<TenantDto>();
 
@@ -75,6 +87,7 @@ namespace QrOrder.Web.Controllers
                     tenant.TableSessionHours,
                     tenant.CreatedAt,
                     tenantUsers.Count,
+                    tableCounts.TryGetValue(tenant.Id, out var tableCount) ? tableCount : 0,
                     admins.Where(x => !string.IsNullOrWhiteSpace(x)).OrderBy(x => x).ToList()));
             }
 
@@ -100,6 +113,24 @@ namespace QrOrder.Web.Controllers
             if (string.IsNullOrWhiteSpace(req.AdminPassword))
                 return BadRequest("Admin password is required.");
 
+            if (req.TableCount < 0 || req.TableCount > 300)
+                return BadRequest("Table count must be between 0 and 300.");
+
+            var staffValidationError = ValidateOptionalStaff(req);
+            if (staffValidationError is not null)
+                return BadRequest(staffValidationError);
+
+            var staffRequests = BuildStaffRequests(req);
+            var requestedEmails = new[] { adminEmail }
+                .Concat(staffRequests.Select(x => x.Email))
+                .ToList();
+            var normalizedRequestedEmails = requestedEmails
+                .Select(x => x.ToUpperInvariant())
+                .ToList();
+
+            if (requestedEmails.Count != requestedEmails.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+                return BadRequest("User emails must be unique.");
+
             var slugExists = await _db.Tenants
                 .IgnoreQueryFilters()
                 .AnyAsync(t => t.Slug == slug);
@@ -107,8 +138,8 @@ namespace QrOrder.Web.Controllers
 
             var userExists = await _users.Users
                 .IgnoreQueryFilters()
-                .AnyAsync(u => u.NormalizedEmail == adminEmail.ToUpperInvariant());
-            if (userExists) return Conflict("Admin email already exists.");
+                .AnyAsync(u => normalizedRequestedEmails.Contains(u.NormalizedEmail!));
+            if (userExists) return Conflict("User email already exists.");
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -124,23 +155,32 @@ namespace QrOrder.Web.Controllers
             _db.Tenants.Add(tenant);
             await _db.SaveChangesAsync();
 
-            var admin = new ApplicationUser
-            {
-                TenantId = tenant.Id,
-                UserName = adminEmail,
-                Email = adminEmail,
-                EmailConfirmed = true
-            };
+            var admin = await CreateStaffUserAsync(tenant.Id, adminEmail, req.AdminPassword, "Admin");
+            if (admin.Result is not null)
+                return admin.Result;
 
-            var createUser = await _users.CreateAsync(admin, req.AdminPassword);
-            if (!createUser.Succeeded)
+            foreach (var staff in staffRequests)
             {
-                return BadRequest(createUser.Errors);
+                var created = await CreateStaffUserAsync(tenant.Id, staff.Email, staff.Password, staff.Role);
+                if (created.Result is not null)
+                    return created.Result;
             }
 
-            var addRole = await _users.AddToRoleAsync(admin, "Admin");
-            if (!addRole.Succeeded)
-                return BadRequest(addRole.Errors);
+            if (req.TableCount > 0)
+            {
+                for (var displayNumber = 1; displayNumber <= req.TableCount; displayNumber++)
+                {
+                    _db.Tables.Add(new Table
+                    {
+                        TenantId = tenant.Id,
+                        DisplayNumber = displayNumber,
+                        TableCode = await NewUniqueTableCodeAsync(),
+                        IsActive = true
+                    });
+                }
+
+                await _db.SaveChangesAsync();
+            }
 
             await tx.CommitAsync();
 
@@ -149,7 +189,9 @@ namespace QrOrder.Web.Controllers
                 tenant.Id,
                 tenant.Name,
                 tenant.Slug,
-                AdminEmail = admin.Email
+                AdminEmail = admin.User?.Email,
+                req.TableCount,
+                StaffUsers = staffRequests.Select(x => new { x.Email, x.Role }).ToList()
             });
         }
 
@@ -180,5 +222,87 @@ namespace QrOrder.Web.Controllers
 
             return string.Join("-", new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
         }
+
+        private async Task<string> NewUniqueTableCodeAsync()
+        {
+            var tableCode = Guid.NewGuid().ToString("N");
+            while (await _db.Tables.IgnoreQueryFilters().AnyAsync(t => t.TableCode == tableCode))
+                tableCode = Guid.NewGuid().ToString("N");
+
+            return tableCode;
+        }
+
+        private async Task<(ApplicationUser? User, IActionResult? Result)> CreateStaffUserAsync(
+            Guid tenantId,
+            string email,
+            string password,
+            string role)
+        {
+            var user = new ApplicationUser
+            {
+                TenantId = tenantId,
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true
+            };
+
+            var createUser = await _users.CreateAsync(user, password);
+            if (!createUser.Succeeded)
+                return (null, BadRequest(createUser.Errors));
+
+            var addRole = await _users.AddToRoleAsync(user, role);
+            if (!addRole.Succeeded)
+                return (null, BadRequest(addRole.Errors));
+
+            return (user, null);
+        }
+
+        private static List<StaffUserRequest> BuildStaffRequests(CreateTenantReq req)
+        {
+            var staff = new List<StaffUserRequest>();
+
+            AddOptionalStaff(staff, req.KitchenEmail, req.KitchenPassword, "Kitchen");
+            AddOptionalStaff(staff, req.ServiceEmail, req.ServicePassword, "Service");
+
+            return staff;
+        }
+
+        private static string? ValidateOptionalStaff(CreateTenantReq req)
+        {
+            if (HasPartialStaff(req.KitchenEmail, req.KitchenPassword))
+                return "Kitchen email and password must be provided together.";
+
+            if (HasPartialStaff(req.ServiceEmail, req.ServicePassword))
+                return "Service email and password must be provided together.";
+
+            return null;
+        }
+
+        private static bool HasPartialStaff(string? email, string? password)
+        {
+            var hasEmail = !string.IsNullOrWhiteSpace(email);
+            var hasPassword = !string.IsNullOrWhiteSpace(password);
+            return hasEmail != hasPassword;
+        }
+
+        private static void AddOptionalStaff(
+            List<StaffUserRequest> staff,
+            string? email,
+            string? password,
+            string role)
+        {
+            var hasEmail = !string.IsNullOrWhiteSpace(email);
+            var hasPassword = !string.IsNullOrWhiteSpace(password);
+
+            if (!hasEmail && !hasPassword)
+                return;
+
+            if (!hasEmail || !hasPassword)
+                return;
+
+            staff.Add(new StaffUserRequest(email!.Trim().ToLowerInvariant(), password!, role));
+        }
+
+        private record StaffUserRequest(string Email, string Password, string Role);
     }
 }

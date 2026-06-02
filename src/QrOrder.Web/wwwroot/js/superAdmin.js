@@ -10,7 +10,7 @@
             password: "",
             token: saved.token || "",
             tenants: [],
-            form: { name: "", slug: "", adminEmail: "", adminPassword: "" },
+            form: emptyTenantForm(),
             loading: false,
             error: "",
             success: ""
@@ -23,6 +23,20 @@
             email: state.email,
             token: state.token
         }));
+    }
+
+    function emptyTenantForm() {
+        return {
+            name: "",
+            slug: "",
+            adminEmail: "",
+            adminPassword: "",
+            tableCount: 0,
+            kitchenEmail: "",
+            kitchenPassword: "",
+            serviceEmail: "",
+            servicePassword: ""
+        };
     }
 
     function clearSession(state) {
@@ -46,7 +60,7 @@
         if (status === 403) return "Bu islem icin yetkiniz yok.";
         if (status === 409) {
             if (/slug/i.test(text)) return "Bu isletme slug degeri zaten kullaniliyor.";
-            if (/email/i.test(text)) return "Bu admin e-postasi zaten kullaniliyor.";
+            if (/email|user/i.test(text)) return "Bu kullanici e-postasi zaten kullaniliyor.";
             return "Bu kayit zaten var.";
         }
         if (status === 400) return "Bilgileri kontrol edip tekrar deneyin.";
@@ -126,15 +140,22 @@
             return;
         }
 
+        const tableCount = Number(state.form.tableCount || 0);
+        if (!Number.isInteger(tableCount) || tableCount < 0 || tableCount > 300) {
+            state.error = "Masa sayisi 0 ile 300 arasinda olmali.";
+            render(state);
+            return;
+        }
+
         try {
             await authorizedJson(state, "/super-admin/tenants", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(state.form)
+                body: JSON.stringify(Object.assign({}, state.form, { tableCount }))
             });
 
-            state.success = "Isletme ve admin kullanicisi olusturuldu.";
-            state.form = { name: "", slug: "", adminEmail: "", adminPassword: "" };
+            state.success = "Isletme, masa kayitlari ve secilen personel kullanicilari olusturuldu.";
+            state.form = emptyTenantForm();
             await loadTenants(state);
         } catch (error) {
             state.error = `Isletme olusturulamadi: ${error.message}`;
@@ -228,13 +249,24 @@
     }
 
     function createTenantPanel(state) {
-        const panel = panelShell("Yeni Isletme", "Isletme ve ilk admin kullanicisini olusturun.");
+        const panel = panelShell("Yeni Isletme", "Isletme, ilk admin, masalar ve opsiyonel personel hesaplarini olusturun.");
         const body = panel.querySelector(".panel-body");
 
         body.appendChild(field("Isletme adi", input(state.form.name, value => state.form.name = value)));
         body.appendChild(field("Slug", input(state.form.slug, value => state.form.slug = value)));
         body.appendChild(field("Admin e-posta", input(state.form.adminEmail, value => state.form.adminEmail = value)));
         body.appendChild(field("Admin sifre", input(state.form.adminPassword, value => state.form.adminPassword = value, "password")));
+        body.appendChild(field("Masa sayisi", input(state.form.tableCount, value => state.form.tableCount = value, "number")));
+
+        const staffTitle = document.createElement("div");
+        staffTitle.className = "form-section-title";
+        staffTitle.innerHTML = "<strong>Opsiyonel personel hesaplari</strong><p class=\"muted\">Bos birakirsaniz isletme admini sonra kendi panelinden olusturabilir.</p>";
+        body.appendChild(staffTitle);
+
+        body.appendChild(field("Mutfak e-posta", input(state.form.kitchenEmail, value => state.form.kitchenEmail = value)));
+        body.appendChild(field("Mutfak sifre", input(state.form.kitchenPassword, value => state.form.kitchenPassword = value, "password")));
+        body.appendChild(field("Servis e-posta", input(state.form.serviceEmail, value => state.form.serviceEmail = value)));
+        body.appendChild(field("Servis sifre", input(state.form.servicePassword, value => state.form.servicePassword = value, "password")));
         body.appendChild(button("Isletme Olustur", "button primary", () => createTenant(state)));
         return panel;
     }
@@ -248,10 +280,10 @@
             return panel;
         }
 
-        const table = tableShell(["Isletme", "Slug", "Durum", "Kullanici", "Admin", ""]);
+        const table = tableShell(["Isletme", "Slug", "Durum", "Masa", "Kullanici", "Admin", ""]);
         for (const tenant of state.tenants) {
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td><strong>${escapeHtml(tenant.name)}</strong><div class="muted">${new Date(tenant.createdAt).toLocaleDateString("tr-TR")}</div></td><td>${escapeHtml(tenant.slug)}</td><td>${status(tenant.isActive)}</td><td>${tenant.userCount}</td><td>${(tenant.adminEmails || []).map(escapeHtml).join("<br>") || "<span class=\"muted\">Yok</span>"}</td>`;
+            tr.innerHTML = `<td><strong>${escapeHtml(tenant.name)}</strong><div class="muted">${new Date(tenant.createdAt).toLocaleDateString("tr-TR")}</div></td><td>${escapeHtml(tenant.slug)}</td><td>${status(tenant.isActive)}</td><td>${tenant.tableCount || 0}</td><td>${tenant.userCount}</td><td>${(tenant.adminEmails || []).map(escapeHtml).join("<br>") || "<span class=\"muted\">Yok</span>"}</td>`;
 
             const actions = document.createElement("td");
             actions.className = "row-actions";
