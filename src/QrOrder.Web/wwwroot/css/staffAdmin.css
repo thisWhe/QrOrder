@@ -337,6 +337,22 @@ button {
     overflow-x: auto;
 }
 
+.table-bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-soft);
+}
+
+.table-bulk-actions .muted {
+    margin: 0;
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;

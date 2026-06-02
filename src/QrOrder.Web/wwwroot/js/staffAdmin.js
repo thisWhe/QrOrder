@@ -666,6 +666,134 @@
         }
     }
 
+    function tableQrLinkLines(tables) {
+        return tables
+            .filter(table => table.qrUrl)
+            .sort((a, b) => Number(a.displayNumber) - Number(b.displayNumber))
+            .map(table => `Masa ${table.displayNumber}: ${table.qrUrl}`)
+            .join("\n");
+    }
+
+    async function copyAllQrLinks(state, tables) {
+        const text = tableQrLinkLines(tables);
+        if (!text) {
+            state.error = "Kopyalanacak QR linki bulunamadi.";
+            state.success = "";
+            render(state);
+            return;
+        }
+
+        await copyText(state, text, `${tables.filter(table => table.qrUrl).length} masa QR linki kopyalandi.`);
+    }
+
+    async function openQrPrintPage(state, tables) {
+        const printableTables = tables
+            .filter(table => table.qrUrl)
+            .sort((a, b) => Number(a.displayNumber) - Number(b.displayNumber));
+
+        if (printableTables.length === 0) {
+            state.error = "Yazdirilacak QR linki bulunamadi.";
+            state.success = "";
+            render(state);
+            return;
+        }
+
+        const tenantName = state.tenant ? state.tenant.name : state.tenantSlug;
+        const title = `${tenantName} QR Kodlari`;
+        const win = window.open("", "_blank");
+        if (!win) {
+            state.error = "QR cikti sayfasi acilamadi. Tarayici popup engelini kontrol edin.";
+            state.success = "";
+            render(state);
+            return;
+        }
+
+        win.document.open();
+        win.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title></head><body style="font-family: Arial, Helvetica, sans-serif; padding: 24px;"><h1>${escapeHtml(title)}</h1><p>QR kodlari hazirlaniyor...</p></body></html>`);
+        win.document.close();
+
+        const qrImages = [];
+
+        try {
+            for (const table of printableTables) {
+                qrImages.push({
+                    table,
+                    src: await blobToDataUrl(await fetchQrPng(state, table))
+                });
+            }
+        } catch (error) {
+            win.close();
+            state.error = contextError("QR cikti sayfasi hazirlanamadi", error.message);
+            state.success = "";
+            render(state);
+            return;
+        }
+
+        const cards = qrImages.map(item => {
+            const table = item.table;
+            return `
+                <article class="qr-card">
+                    <h2>Masa ${escapeHtml(table.displayNumber)}</h2>
+                    <img src="${item.src}" alt="Masa ${escapeHtml(table.displayNumber)} QR" />
+                    <p>${escapeHtml(table.qrUrl)}</p>
+                </article>`;
+        }).join("");
+
+        win.document.open();
+        win.document.write(`<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 24px; color: #20242a; font-family: Arial, Helvetica, sans-serif; background: #f5f6f8; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+        h1 { margin: 0; font-size: 24px; }
+        .muted { margin: 4px 0 0; color: #68717d; }
+        button { min-height: 38px; padding: 8px 14px; border: 1px solid #d9dee5; border-radius: 7px; background: #0f766e; color: #fff; font: inherit; cursor: pointer; }
+        .qr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .qr-card { min-height: 310px; padding: 18px; border: 1px solid #d9dee5; border-radius: 8px; background: #fff; text-align: center; page-break-inside: avoid; }
+        .qr-card h2 { margin: 0 0 12px; font-size: 22px; }
+        .qr-card img { width: 190px; max-width: 100%; height: auto; }
+        .qr-card p { margin: 12px auto 0; max-width: 260px; color: #68717d; font-size: 11px; overflow-wrap: anywhere; }
+        @media print {
+            body { padding: 0; background: #fff; }
+            header { padding: 0 0 12px; }
+            button { display: none; }
+            .qr-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+            .qr-card { box-shadow: none; }
+        }
+        @media (max-width: 760px) {
+            .qr-grid { grid-template-columns: 1fr; }
+            header { align-items: flex-start; flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>${escapeHtml(title)}</h1>
+            <p class="muted">${printableTables.length} masa QR kodu</p>
+        </div>
+        <button type="button" onclick="window.print()">Yazdir</button>
+    </header>
+    <main class="qr-grid">${cards}</main>
+</body>
+</html>`);
+        win.document.close();
+    }
+
+    function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error || new Error("Blob okunamadi."));
+            reader.readAsDataURL(blob);
+        });
+    }
+
     function money(value) {
         return Number(value).toLocaleString("tr-TR", {
             minimumFractionDigits: 2,
@@ -1422,6 +1550,18 @@
             body.appendChild(empty("Aramaya uygun masa bulunamadi."));
             return panel;
         }
+
+        const bulkActions = document.createElement("div");
+        bulkActions.className = "table-bulk-actions";
+        bulkActions.appendChild(button("Gorunen QR Linklerini Kopyala", "button", () => copyAllQrLinks(state, visibleTables)));
+        bulkActions.appendChild(button("QR Cikti Sayfasi", "button primary", () => openQrPrintPage(state, visibleTables)));
+        const bulkInfo = document.createElement("p");
+        bulkInfo.className = "muted";
+        bulkInfo.textContent = query
+            ? `${visibleTables.length} filtrelenmis masa icin islem yapilir.`
+            : `${visibleTables.length} masa icin toplu islem yapilir.`;
+        bulkActions.appendChild(bulkInfo);
+        body.appendChild(bulkActions);
 
         const table = tableShell(["Masa", "Durum", "Siparis", "QR Link", ""]);
         for (const item of visibleTables) {
