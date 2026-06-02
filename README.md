@@ -62,6 +62,16 @@ http://localhost:5140/staff/service
 http://localhost:5140/v/demo-cafe/t/84222936215c466d98c512d3d50947ed
 ```
 
+## Kullanım Senaryosu
+
+1. Super Admin panelinden yeni bir işletme ve işletme admini oluşturulur.
+2. İşletme admini kendi paneline giriş yaparak kategori, ürün ve masa kayıtlarını oluşturur.
+3. Her masa için benzersiz QR menü linki üretilir.
+4. Müşteri QR kodu okutarak masaya özel menüyü açar ve sipariş oluşturur.
+5. Sipariş gerçek zamanlı olarak mutfak ve servis ekranlarına düşer.
+6. Mutfak sipariş durumunu günceller, servis hazır siparişleri ve garson çağrılarını takip eder.
+7. Admin panelinden sipariş geçmişi, servis çağrıları ve işletme ayarları yönetilir.
+
 ## Demo Kullanıcılar
 
 ```text
