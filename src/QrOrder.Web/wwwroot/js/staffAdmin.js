@@ -792,6 +792,7 @@
         content.className = "content";
         appendNotices(content, state);
         content.appendChild(renderSummary(state));
+        content.appendChild(renderSetupGuide(state));
 
         if (state.activeTab === "products") content.appendChild(renderProducts(state));
         if (state.activeTab === "categories") content.appendChild(renderCategories(state));
@@ -866,6 +867,45 @@
         return grid;
     }
 
+    function renderSetupGuide(state) {
+        const hasMissingSetup = state.categories.length === 0 || state.products.length === 0 || state.tables.length === 0;
+        const panel = document.createElement("section");
+        panel.className = `setup-guide ${hasMissingSetup ? "" : "complete"}`;
+
+        if (!hasMissingSetup) {
+            panel.innerHTML = "<div><strong>Kurulum tamam</strong><p class=\"muted\">Kategori, urun ve masa kayitlari hazir. QR linklerini masalara yerlestirebilirsiniz.</p></div>";
+            return panel;
+        }
+
+        panel.innerHTML = "<div><strong>Ilk kurulum</strong><p class=\"muted\">Musteri menusu acilmadan once asagidaki temel kayitlari tamamlayin.</p></div>";
+
+        const steps = document.createElement("div");
+        steps.className = "setup-steps";
+        steps.appendChild(setupStep("1", "Kategori ekle", state.categories.length > 0, "Kahvalti, Icecek, Tatli gibi menu bolumleri.", () => {
+            state.activeTab = "categories";
+            render(state);
+        }));
+        steps.appendChild(setupStep("2", "Urun ekle", state.products.length > 0, "Urunler aktif bir kategoriye bagli olmalidir.", () => {
+            state.activeTab = state.categories.length === 0 ? "categories" : "products";
+            render(state);
+        }));
+        steps.appendChild(setupStep("3", "Masa QR olustur", state.tables.length > 0, "Her masa icin benzersiz QR linki uretilir.", () => {
+            state.activeTab = "tables";
+            render(state);
+        }));
+
+        panel.appendChild(steps);
+        return panel;
+    }
+
+    function setupStep(number, title, done, description, onClick) {
+        const item = document.createElement("article");
+        item.className = `setup-step ${done ? "done" : ""}`;
+        item.innerHTML = `<span>${done ? "Tamam" : number}</span><div><strong>${title}</strong><p>${description}</p></div>`;
+        item.appendChild(button(done ? "Gor" : "Basla", done ? "button" : "button primary", onClick));
+        return item;
+    }
+
     function renderCategories(state) {
         const wrap = document.createElement("section");
         wrap.className = "grid-two";
@@ -905,7 +945,7 @@
         const body = panel.querySelector(".panel-body");
 
         if (state.categories.length === 0) {
-            body.appendChild(empty("Kategori bulunamadi."));
+            body.appendChild(empty("Henuz kategori yok. Once soldaki formdan menu bolumu ekleyin. Ornek: Kahvalti, Burger, Icecek."));
             return panel;
         }
 
@@ -948,8 +988,13 @@
     function productFormPanel(state) {
         const panel = panelShell(state.productForm.id ? "Urun Duzenle" : "Yeni Urun", "Fiyat, kategori ve aktiflik bilgisini yonetin.");
         const body = panel.querySelector(".panel-body");
+        const hasActiveCategory = state.categories.some(x => x.isActive);
 
         body.appendChild(field("Kategori", select(state.productForm.categoryId, state.categories.filter(x => x.isActive).map(x => [x.id, x.name]), value => state.productForm.categoryId = value)));
+        if (!hasActiveCategory) {
+            const hint = empty("Urun eklemek icin once aktif bir kategori olusturun.");
+            body.appendChild(hint);
+        }
         body.appendChild(field("Urun adi", input(state.productForm.name, value => state.productForm.name = value)));
         body.appendChild(field("Aciklama", textarea(state.productForm.description, value => state.productForm.description = value)));
         body.appendChild(field("Fiyat", input(state.productForm.price, value => state.productForm.price = value, "number", "0.01")));
@@ -969,7 +1014,15 @@
 
         const actions = document.createElement("div");
         actions.className = "form-actions";
-        actions.appendChild(button(state.productForm.id ? "Guncelle" : "Ekle", "button primary", () => saveProduct(state)));
+        const save = button(state.productForm.id ? "Guncelle" : "Ekle", "button primary", () => saveProduct(state));
+        save.disabled = !hasActiveCategory;
+        actions.appendChild(save);
+        if (!hasActiveCategory) {
+            actions.appendChild(button("Kategori Ekle", "button", () => {
+                state.activeTab = "categories";
+                render(state);
+            }));
+        }
         actions.appendChild(button("Temizle", "button", () => {
             state.productForm = emptyProductForm();
             render(state);
@@ -984,7 +1037,7 @@
         const body = panel.querySelector(".panel-body");
 
         if (state.products.length === 0) {
-            body.appendChild(empty("Urun bulunamadi."));
+            body.appendChild(empty("Henuz urun yok. Once kategori secip urun adi, fiyat ve siralama bilgisiyle ilk urunu ekleyin."));
             return panel;
         }
 

@@ -156,6 +156,71 @@ button {
     line-height: 1;
 }
 
+.setup-guide {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding: 16px;
+    border: 1px solid #f4d7a1;
+    border-radius: 8px;
+    background: #fffaf0;
+    box-shadow: var(--shadow);
+}
+
+.setup-guide.complete {
+    border-color: #bde7d4;
+    background: #f1fbf6;
+}
+
+.setup-guide > div > strong {
+    display: block;
+    font-size: 18px;
+}
+
+.setup-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.setup-step {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid #f4d7a1;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.setup-step > span {
+    display: inline-grid;
+    min-width: 34px;
+    min-height: 34px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--warning-bg);
+    color: var(--warning);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.setup-step.done > span {
+    background: #e9f7f1;
+    color: var(--ok);
+}
+
+.setup-step strong {
+    display: block;
+}
+
+.setup-step p {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
 .report-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -503,7 +568,8 @@ button {
     }
 
     .report-grid,
-    .admin-order-list {
+    .admin-order-list,
+    .setup-steps {
         grid-template-columns: 1fr;
     }
 
@@ -529,5 +595,13 @@ button {
 
     .summary-grid {
         grid-template-columns: 1fr;
+    }
+
+    .setup-step {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .setup-step .button {
+        grid-column: 1 / -1;
     }
 }
