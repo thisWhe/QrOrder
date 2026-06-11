@@ -504,7 +504,7 @@
 
         const searchWrap = document.createElement("label");
         searchWrap.className = "menu-search";
-        searchWrap.innerHTML = `<span aria-hidden="true">⌕</span>`;
+        searchWrap.innerHTML = `<span aria-hidden="true">&#128269;</span>`;
 
         const search = document.createElement("input");
         search.type = "search";
@@ -650,7 +650,20 @@
                     const visualData = productVisual(category.name, product.name);
                     const visual = document.createElement("div");
                     visual.className = `product-visual ${visualData.tone}`;
-                    visual.innerHTML = `<span>${visualData.label}</span>`;
+                    const fallback = document.createElement("span");
+                    fallback.textContent = visualData.label;
+                    visual.appendChild(fallback);
+
+                    if (product.imageUrl) {
+                        const image = document.createElement("img");
+                        image.src = product.imageUrl;
+                        image.alt = product.name || "Urun gorseli";
+                        image.loading = "lazy";
+                        image.decoding = "async";
+                        image.addEventListener("load", () => visual.classList.add("has-image"));
+                        image.addEventListener("error", () => image.remove());
+                        visual.appendChild(image);
+                    }
                     item.appendChild(visual);
 
                     const content = document.createElement("div");
@@ -658,7 +671,13 @@
 
                     const name = document.createElement("div");
                     name.className = "product-top";
-                    name.innerHTML = `<h3>${product.name}</h3><span class="price">${money(product.price)}</span>`;
+                    const productName = document.createElement("h3");
+                    productName.textContent = product.name;
+                    const price = document.createElement("span");
+                    price.className = "price";
+                    price.textContent = money(product.price);
+                    name.appendChild(productName);
+                    name.appendChild(price);
                     content.appendChild(name);
 
                     if (product.isAvailable === false) {

@@ -35,7 +35,26 @@
     }
 
     function emptyProductForm() {
-        return { id: "", categoryId: "", name: "", description: "", price: "", sortOrder: 0, isActive: true, isAvailable: true };
+        return {
+            id: "",
+            categoryId: "",
+            name: "",
+            description: "",
+            imageUrl: "",
+            imageFile: null,
+            imagePreviewUrl: "",
+            price: "",
+            sortOrder: 0,
+            isActive: true,
+            isAvailable: true
+        };
+    }
+
+    function resetProductForm(state) {
+        if (state.productForm.imagePreviewUrl) {
+            URL.revokeObjectURL(state.productForm.imagePreviewUrl);
+        }
+        state.productForm = emptyProductForm();
     }
 
     function saveSession(state) {
@@ -307,6 +326,8 @@
             isAvailable: Boolean(state.productForm.isAvailable)
         };
 
+        let productId = state.productForm.id;
+
         try {
             if (state.productForm.id) {
                 await authorizedJson(state, `/staff/products/${encodeURIComponent(state.productForm.id)}`, {
@@ -316,7 +337,7 @@
                 });
                 state.success = "Urun guncellendi.";
             } else {
-                await authorizedJson(state, "/staff/products", {
+                const created = await authorizedJson(state, "/staff/products", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -327,13 +348,57 @@
                         sortOrder: body.sortOrder
                     })
                 });
+                productId = created.id;
                 state.success = "Urun eklendi.";
             }
 
-            state.productForm = emptyProductForm();
+            if (state.productForm.imageFile) {
+                try {
+                    await uploadProductImage(state, productId, state.productForm.imageFile);
+                    state.success += " Gorsel yuklendi.";
+                } catch (error) {
+                    const imageError = contextError("Urun kaydedildi ancak gorsel yuklenemedi", error.message);
+                    resetProductForm(state);
+                    await loadAll(state);
+                    state.error = imageError;
+                    render(state);
+                    return;
+                }
+            }
+
+            resetProductForm(state);
             await loadAll(state);
         } catch (error) {
             state.error = contextError("Urun kaydedilemedi", error.message);
+            render(state);
+        }
+    }
+
+    async function uploadProductImage(state, productId, file) {
+        const form = new FormData();
+        form.append("image", file);
+
+        return await authorizedJson(state, `/staff/products/${encodeURIComponent(productId)}/image`, {
+            method: "POST",
+            body: form
+        });
+    }
+
+    async function deleteProductImage(state) {
+        if (!state.productForm.id || !state.productForm.imageUrl) return;
+
+        try {
+            await authorizedJson(state, `/staff/products/${encodeURIComponent(state.productForm.id)}/image`, {
+                method: "DELETE"
+            });
+            state.productForm.imageUrl = "";
+            const product = state.products.find(x => x.id === state.productForm.id);
+            if (product) product.imageUrl = null;
+            state.success = "Urun gorseli kaldirildi.";
+            state.error = "";
+            render(state);
+        } catch (error) {
+            state.error = contextError("Urun gorseli kaldirilamadi", error.message);
             render(state);
         }
     }
@@ -1125,6 +1190,61 @@
         }
         body.appendChild(field("Urun adi", input(state.productForm.name, value => state.productForm.name = value)));
         body.appendChild(field("Aciklama", textarea(state.productForm.description, value => state.productForm.description = value)));
+
+        const imageInput = document.createElement("input");
+        imageInput.type = "file";
+        imageInput.accept = "image/jpeg,image/png,image/webp";
+        imageInput.addEventListener("change", () => {
+            const file = imageInput.files && imageInput.files[0];
+            if (!file) return;
+
+            if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+                state.error = "Urun gorseli JPEG, PNG veya WebP formatinda olmali.";
+                render(state);
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                state.error = "Urun gorseli 5 MB'dan buyuk olamaz.";
+                render(state);
+                return;
+            }
+
+            if (state.productForm.imagePreviewUrl) {
+                URL.revokeObjectURL(state.productForm.imagePreviewUrl);
+            }
+            state.productForm.imageFile = file;
+            state.productForm.imagePreviewUrl = URL.createObjectURL(file);
+            state.error = "";
+            render(state);
+        });
+        body.appendChild(field("Urun gorseli", imageInput));
+
+        const previewUrl = state.productForm.imagePreviewUrl || state.productForm.imageUrl;
+        if (previewUrl) {
+            const preview = document.createElement("div");
+            preview.className = "product-image-editor";
+            preview.innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="Urun gorseli onizleme" /><div><strong>${state.productForm.imageFile ? "Yeni gorsel secildi" : "Mevcut gorsel"}</strong><p class="muted">JPEG, PNG veya WebP. En fazla 5 MB.</p></div>`;
+            if (state.productForm.imageFile) {
+                preview.appendChild(button("Secimi Kaldir", "button", () => {
+                    if (state.productForm.imagePreviewUrl) {
+                        URL.revokeObjectURL(state.productForm.imagePreviewUrl);
+                    }
+                    state.productForm.imageFile = null;
+                    state.productForm.imagePreviewUrl = "";
+                    render(state);
+                }));
+            } else if (state.productForm.id && state.productForm.imageUrl) {
+                preview.appendChild(button("Gorseli Kaldir", "button danger", () => deleteProductImage(state)));
+            }
+            body.appendChild(preview);
+        } else {
+            const imageHint = document.createElement("p");
+            imageHint.className = "muted product-image-hint";
+            imageHint.textContent = "Gorsel zorunlu degildir. Gorsel yoksa musteride kategoriye uygun varsayilan alan gosterilir.";
+            body.appendChild(imageHint);
+        }
+
         body.appendChild(field("Fiyat", input(state.productForm.price, value => state.productForm.price = value, "number", "0.01")));
         body.appendChild(field("Sira", input(state.productForm.sortOrder, value => state.productForm.sortOrder = value, "number", "1")));
 
@@ -1152,7 +1272,7 @@
             }));
         }
         actions.appendChild(button("Temizle", "button", () => {
-            state.productForm = emptyProductForm();
+            resetProductForm(state);
             render(state);
         }));
         body.appendChild(actions);
@@ -1169,10 +1289,13 @@
             return panel;
         }
 
-        const table = tableShell(["Sira", "Urun", "Kategori", "Fiyat", "Durum", "Stok", ""]);
+        const table = tableShell(["", "Sira", "Urun", "Kategori", "Fiyat", "Durum", "Stok", ""]);
         for (const product of state.products) {
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${Number(product.sortOrder || 0)}</td><td><strong>${escapeHtml(product.name)}</strong><div class="muted">${escapeHtml(product.description || "")}</div></td><td>${escapeHtml(product.categoryName)}</td><td>${money(product.price)}</td><td>${status(product.isActive)}</td><td>${stockStatus(product.isAvailable)}</td>`;
+            const imageCell = product.imageUrl
+                ? `<img class="product-list-image" src="${escapeHtml(product.imageUrl)}" alt="" />`
+                : `<span class="product-list-placeholder">${escapeHtml(String(product.name || "U").charAt(0).toUpperCase())}</span>`;
+            tr.innerHTML = `<td>${imageCell}</td><td>${Number(product.sortOrder || 0)}</td><td><strong>${escapeHtml(product.name)}</strong><div class="muted">${escapeHtml(product.description || "")}</div></td><td>${escapeHtml(product.categoryName)}</td><td>${money(product.price)}</td><td>${status(product.isActive)}</td><td>${stockStatus(product.isAvailable)}</td>`;
             const actions = document.createElement("td");
             actions.className = "row-actions";
             actions.appendChild(button("Duzenle", "button", () => {
@@ -1181,6 +1304,9 @@
                     categoryId: product.categoryId,
                     name: product.name,
                     description: product.description || "",
+                    imageUrl: product.imageUrl || "",
+                    imageFile: null,
+                    imagePreviewUrl: "",
                     price: product.price,
                     sortOrder: product.sortOrder || 0,
                     isActive: product.isActive,

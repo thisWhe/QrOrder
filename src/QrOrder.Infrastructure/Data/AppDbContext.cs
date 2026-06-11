@@ -92,6 +92,10 @@ namespace QrOrder.Infrastructure.Data
                 .Property(x => x.Price)
                 .HasPrecision(18, 2);
 
+            modelBuilder.Entity<Product>()
+                .Property(x => x.ImageUrl)
+                .HasMaxLength(500);
+
             modelBuilder.Entity<Order>()
                 .Property(x => x.TotalAmount)
                 .HasPrecision(18, 2);

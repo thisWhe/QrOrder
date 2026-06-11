@@ -17,6 +17,7 @@ using QrOrder.Infrastructure.Data;
 using QrOrder.Infrastructure.Services;
 using QrOrder.Web.Realtime;
 using QrOrder.Web.Seed;
+using QrOrder.Web.Storage;
 using Serilog;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -60,6 +61,7 @@ builder.Services.AddScoped<IPublicOrderService, PublicOrderService>();
 builder.Services.AddScoped<IStaffOrderService, StaffOrderService>();
 builder.Services.AddScoped<IPublicServiceCallService, PublicServiceCallService>();
 builder.Services.AddScoped<IStaffServiceCallService, StaffServiceCallService>();
+builder.Services.AddSingleton<IProductImageStorage, LocalProductImageStorage>();
 
 
 // Swagger + JWT

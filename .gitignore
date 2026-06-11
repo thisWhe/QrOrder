@@ -12,6 +12,7 @@ obj/
 
 # Logs
 logs/
+src/QrOrder.Web/wwwroot/uploads/
 *.log
 
 # Local configuration / secrets

@@ -39,7 +39,13 @@ namespace QrOrder.Infrastructure.Services
                 .Select(p => new
                 {
                     p.CategoryId,
-                    Product = new PublicMenuProductDto(p.Id, p.Name, p.Description, p.Price, p.IsAvailable)
+                    Product = new PublicMenuProductDto(
+                        p.Id,
+                        p.Name,
+                        p.Description,
+                        p.ImageUrl,
+                        p.Price,
+                        p.IsAvailable)
                 })
                 .ToListAsync(cancellationToken);
 
