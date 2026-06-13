@@ -81,24 +81,5 @@ Demo kullanicilar yalnizca `Seed:DemoData=true` oldugunda gelistirme ortaminda o
 
 Pilot on kontrolu:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\pilot\Test-PilotReadiness.ps1
-```
 
-GitHub guvenlik kontrolu:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\security\Test-GitHubSafety.ps1
-```
-
-## Veri Guvenligi
-
-Asagidaki veriler GitHub'a gonderilmez:
-
-- Production connection string ve JWT anahtari
-- Gercek personel hesaplari ve sifreleri
-- MSSQL veritabani ve yedek dosyalari
-- Upload edilen isletme ve urun gorselleri
-- Log, production artifact ve yerel ayar dosyalari
-
-Gercek isletme verileri production MSSQL veritabaninda, gorseller ise sunucunun deployment disindaki upload klasorunde saklanir.
