@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QrOrder.Application.Common;
 using QrOrder.Domain.Entities;
+using QrOrder.Domain.Enums;
 using QrOrder.Infrastructure.Data;
 using QrOrder.Web.Storage;
 
@@ -42,6 +43,15 @@ namespace QrOrder.Web.Controllers
                     p.Id,
                     p.Name,
                     p.Description,
+                    p.Ingredients,
+                    p.PortionInfo,
+                    p.Calories,
+                    AllergenFlags = (int)p.AllergenFlags,
+                    p.ContainsAlcohol,
+                    p.ContainsPork,
+                    p.IsVegetarian,
+                    p.IsVegan,
+                    ServingTemperature = (int)p.ServingTemperature,
                     p.ImageUrl,
                     p.Price,
                     p.SortOrder,
@@ -55,13 +65,30 @@ namespace QrOrder.Web.Controllers
             return Ok(data);
         }
 
-        public record CreateReq(Guid CategoryId, string Name, string? Description, decimal Price, int SortOrder);
+        public record CreateReq(
+            Guid CategoryId,
+            string Name,
+            string? Description,
+            decimal Price,
+            int SortOrder,
+            string? Ingredients,
+            string? PortionInfo,
+            int? Calories,
+            int AllergenFlags,
+            bool ContainsAlcohol,
+            bool ContainsPork,
+            bool IsVegetarian,
+            bool IsVegan,
+            int ServingTemperature);
 
         [HttpPost]
         public async Task<IActionResult> Create(CreateReq req)
         {
             if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest("Name required.");
             if (req.Price <= 0) return BadRequest("Price must be > 0.");
+            var validationError = ValidateProductDetails(req.Ingredients, req.PortionInfo, req.Calories, req.AllergenFlags);
+            if (validationError != null) return BadRequest(validationError);
+            if (!Enum.IsDefined((ServingTemperature)req.ServingTemperature)) return BadRequest("Serving temperature is invalid.");
 
             var cat = await _db.Categories.SingleOrDefaultAsync(c => c.Id == req.CategoryId && c.IsActive);
             if (cat == null) return BadRequest("Invalid category.");
@@ -71,6 +98,15 @@ namespace QrOrder.Web.Controllers
                 CategoryId = req.CategoryId,
                 Name = req.Name.Trim(),
                 Description = req.Description?.Trim(),
+                Ingredients = NormalizeOptional(req.Ingredients),
+                PortionInfo = NormalizeOptional(req.PortionInfo),
+                Calories = req.Calories,
+                AllergenFlags = (AllergenFlags)req.AllergenFlags,
+                ContainsAlcohol = req.ContainsAlcohol,
+                ContainsPork = req.ContainsPork,
+                IsVegetarian = req.IsVegetarian || req.IsVegan,
+                IsVegan = req.IsVegan,
+                ServingTemperature = (ServingTemperature)req.ServingTemperature,
                 Price = req.Price,
                 SortOrder = req.SortOrder,
                 IsActive = true,
@@ -83,7 +119,23 @@ namespace QrOrder.Web.Controllers
             return Ok(new { p.Id });
         }
 
-        public record UpdateReq(Guid CategoryId, string Name, string? Description, decimal Price, int SortOrder, bool IsActive, bool IsAvailable);
+        public record UpdateReq(
+            Guid CategoryId,
+            string Name,
+            string? Description,
+            decimal Price,
+            int SortOrder,
+            bool IsActive,
+            bool IsAvailable,
+            string? Ingredients,
+            string? PortionInfo,
+            int? Calories,
+            int AllergenFlags,
+            bool ContainsAlcohol,
+            bool ContainsPork,
+            bool IsVegetarian,
+            bool IsVegan,
+            int ServingTemperature);
         public record UpdateStatusReq(bool IsActive);
         public record UpdateAvailabilityReq(bool IsAvailable);
 
@@ -161,6 +213,9 @@ namespace QrOrder.Web.Controllers
         {
             if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest("Name required.");
             if (req.Price <= 0) return BadRequest("Price must be > 0.");
+            var validationError = ValidateProductDetails(req.Ingredients, req.PortionInfo, req.Calories, req.AllergenFlags);
+            if (validationError != null) return BadRequest(validationError);
+            if (!Enum.IsDefined((ServingTemperature)req.ServingTemperature)) return BadRequest("Serving temperature is invalid.");
 
             var p = await _db.Products.SingleOrDefaultAsync(x => x.Id == id);
             if (p == null) return NotFound();
@@ -171,6 +226,15 @@ namespace QrOrder.Web.Controllers
             p.CategoryId = req.CategoryId;
             p.Name = req.Name.Trim();
             p.Description = req.Description?.Trim();
+            p.Ingredients = NormalizeOptional(req.Ingredients);
+            p.PortionInfo = NormalizeOptional(req.PortionInfo);
+            p.Calories = req.Calories;
+            p.AllergenFlags = (AllergenFlags)req.AllergenFlags;
+            p.ContainsAlcohol = req.ContainsAlcohol;
+            p.ContainsPork = req.ContainsPork;
+            p.IsVegetarian = req.IsVegetarian || req.IsVegan;
+            p.IsVegan = req.IsVegan;
+            p.ServingTemperature = (ServingTemperature)req.ServingTemperature;
             p.Price = req.Price;
             p.SortOrder = req.SortOrder;
             p.IsActive = req.IsActive;
@@ -204,18 +268,86 @@ namespace QrOrder.Web.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id:guid}")]
-        public async Task<IActionResult> Delete(Guid id)
+        [HttpPatch("{id:guid}/restore")]
+        public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
         {
-            var p = await _db.Products.SingleOrDefaultAsync(x => x.Id == id);
+            var p = await _db.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (p == null) return NotFound();
+
+            var categoryIsActive = await _db.Categories
+                .AnyAsync(x => x.Id == p.CategoryId && x.IsActive, cancellationToken);
+            if (!categoryIsActive)
+                return Conflict("Product category is inactive.");
+
+            p.IsActive = true;
+            p.IsAvailable = true;
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return NoContent();
+        }
+
+        [HttpPatch("{id:guid}/archive")]
+        public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
+        {
+            var p = await _db.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (p == null) return NotFound();
+
+            p.IsActive = false;
+            p.IsAvailable = false;
+            await _db.SaveChangesAsync(cancellationToken);
+
+            return NoContent();
+        }
+
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+        {
+            var p = await _db.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (p == null) return NotFound();
+
+            var hasOrderHistory = await _db.OrderItems
+                .AnyAsync(x => x.ProductId == id, cancellationToken);
+
+            if (hasOrderHistory)
+            {
+                p.IsActive = false;
+                p.IsAvailable = false;
+                await _db.SaveChangesAsync(cancellationToken);
+
+                return Ok(new
+                {
+                    deleted = false,
+                    archived = true
+                });
+            }
 
             var imageUrl = p.ImageUrl;
             _db.Products.Remove(p);
-            await _db.SaveChangesAsync();
-            await _imageStorage.DeleteAsync(imageUrl);
-            return NoContent();
+            await _db.SaveChangesAsync(cancellationToken);
+            await _imageStorage.DeleteAsync(imageUrl, cancellationToken);
+
+            return Ok(new
+            {
+                deleted = true,
+                archived = false
+            });
         }
+
+        private static string? ValidateProductDetails(string? ingredients, string? portionInfo, int? calories, int allergenFlags)
+        {
+            if (ingredients?.Length > 1500) return "Ingredients cannot exceed 1500 characters.";
+            if (portionInfo?.Length > 150) return "Portion information cannot exceed 150 characters.";
+            if (calories is < 0 or > 10000) return "Calories must be between 0 and 10000.";
+
+            const int supportedFlags = (1 << 14) - 1;
+            if (allergenFlags < 0 || (allergenFlags & ~supportedFlags) != 0)
+                return "Allergen selection is invalid.";
+
+            return null;
+        }
+
+        private static string? NormalizeOptional(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     }
 }

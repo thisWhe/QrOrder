@@ -58,7 +58,7 @@ namespace QrOrder.Infrastructure.Services
 
             if (order == null) return null;
 
-            if (!IsValidTransition(order.Status, status))
+            if (!StaffOrderPolicy.IsValidTransition(order.Status, status))
                 throw new InvalidOperationException("Invalid order status transition.");
 
             order.Status = status;
@@ -67,13 +67,5 @@ namespace QrOrder.Infrastructure.Services
             return new StaffOrderStatusChangedResult(order.Id, order.Status.ToString(), order.Table.DisplayNumber);
         }
 
-        private static bool IsValidTransition(OrderStatus current, OrderStatus next)
-        {
-            if (current == next) return true;
-            if (current == OrderStatus.Canceled || current == OrderStatus.Delivered) return false;
-            if (next == OrderStatus.Canceled) return true;
-
-            return next >= current;
-        }
     }
 }

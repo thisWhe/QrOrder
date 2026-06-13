@@ -7,6 +7,7 @@ namespace QrOrder.Application.Orders
     public record CreateOrderRequest(
         string TenantSlug,
         string SessionToken,
+        Guid RequestId,
         List<CreateOrderItemRequest> Items,
         string? CustomerNote);
 
@@ -27,7 +28,8 @@ namespace QrOrder.Application.Orders
         decimal Total,
         int TableNumber,
         string Status,
-        DateTimeOffset CreatedAt);
+        DateTimeOffset CreatedAt,
+        bool IsNew);
 
     public record StaffOrderDto(
         Guid Id,

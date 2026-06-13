@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.RateLimiting;
 using QrOrder.Application.ServiceCalls;
 using QrOrder.Web.Realtime;
 
@@ -11,18 +12,22 @@ namespace QrOrder.Web.Controllers
     {
         private readonly IPublicServiceCallService _serviceCalls;
         private readonly IHubContext<StaffOrdersHub> _staffHub;
+        private readonly ILogger<PublicServiceCallsController> _logger;
 
         public PublicServiceCallsController(
             IPublicServiceCallService serviceCalls,
-            IHubContext<StaffOrdersHub> staffHub)
+            IHubContext<StaffOrdersHub> staffHub,
+            ILogger<PublicServiceCallsController> logger)
         {
             _serviceCalls = serviceCalls;
             _staffHub = staffHub;
+            _logger = logger;
         }
 
         public record CreateServiceCallRequest(string TenantSlug, string SessionToken, string? Message);
 
         [HttpPost]
+        [EnableRateLimiting("public-write")]
         public async Task<IActionResult> Create([FromBody] CreateServiceCallRequest req)
         {
             try
@@ -32,8 +37,15 @@ namespace QrOrder.Web.Controllers
                     req.SessionToken,
                     req.Message));
 
-                await _staffHub.Clients.Group($"tenant:{call.TenantId}")
-                    .SendAsync("ServiceCallCreated", call);
+                try
+                {
+                    await _staffHub.Clients.Group($"tenant:{call.TenantId}")
+                        .SendAsync("ServiceCallCreated", call);
+                }
+                catch (Exception error)
+                {
+                    _logger.LogWarning(error, "Service call {ServiceCallId} was saved but its SignalR notification failed.", call.Id);
+                }
 
                 return Ok(call);
             }

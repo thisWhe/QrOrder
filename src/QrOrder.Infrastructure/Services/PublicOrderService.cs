@@ -5,6 +5,7 @@ using QrOrder.Application.Security;
 using QrOrder.Domain.Entities;
 using QrOrder.Domain.Enums;
 using QrOrder.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 
 namespace QrOrder.Infrastructure.Services
 {
@@ -16,11 +17,16 @@ namespace QrOrder.Infrastructure.Services
 
         private readonly AppDbContext _db;
         private readonly ITenantContext _tenantContext;
+        private readonly IBusinessHoursService _businessHours;
 
-        public PublicOrderService(AppDbContext db, ITenantContext tenantContext)
+        public PublicOrderService(
+            AppDbContext db,
+            ITenantContext tenantContext,
+            IBusinessHoursService businessHours)
         {
             _db = db;
             _tenantContext = tenantContext;
+            _businessHours = businessHours;
         }
 
         public async Task<OrderCreatedResult> CreateAsync(
@@ -33,11 +39,11 @@ namespace QrOrder.Infrastructure.Services
 
             _tenantContext.TenantId = tenant.Id;
 
-            if (!tenant.IsOrderingEnabled)
-                throw new InvalidOperationException("Online ordering is currently disabled.");
-
             if (string.IsNullOrWhiteSpace(request.SessionToken))
                 throw new UnauthorizedAccessException("Session token is required.");
+
+            if (request.RequestId == Guid.Empty)
+                throw new InvalidOperationException("RequestId is required.");
 
             if (request.Items.Count == 0)
                 throw new InvalidOperationException("Empty order.");
@@ -75,6 +81,25 @@ namespace QrOrder.Infrastructure.Services
             if (!session.Table.IsActive)
                 throw new UnauthorizedAccessException("Table is inactive.");
 
+            var existingOrder = await FindExistingOrderAsync(
+                request.RequestId,
+                cancellationToken);
+            if (existingOrder != null)
+            {
+                EnsureRequestBelongsToTable(existingOrder, session.TableId);
+                return ToCreatedResult(existingOrder, false);
+            }
+
+            if (!tenant.IsOrderingEnabled)
+                throw new InvalidOperationException("Online ordering is currently disabled.");
+
+            var businessStatus = await _businessHours.EvaluateAsync(
+                tenant.Id,
+                tenant.TimeZoneId,
+                cancellationToken);
+            if (!businessStatus.IsOpen)
+                throw new InvalidOperationException("Business is currently closed.");
+
             var productIds = normalizedItems.Select(i => i.ProductId).ToList();
             var products = await _db.Products
                 .Where(p => productIds.Contains(p.Id) && p.IsActive && p.IsAvailable)
@@ -86,6 +111,7 @@ namespace QrOrder.Infrastructure.Services
             var order = new Order
             {
                 TenantId = tenant.Id,
+                ClientRequestId = request.RequestId,
                 TableId = session.TableId,
                 TableSessionId = session.Id,
                 Status = OrderStatus.New,
@@ -108,16 +134,62 @@ namespace QrOrder.Infrastructure.Services
             order.TotalAmount = order.Items.Sum(i => i.UnitPriceSnapshot * i.Quantity);
 
             _db.Orders.Add(order);
-            await _db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException error) when (IsUniqueConstraintViolation(error))
+            {
+                foreach (var item in order.Items)
+                    _db.Entry(item).State = EntityState.Detached;
+                _db.Entry(order).State = EntityState.Detached;
 
-            return new OrderCreatedResult(
-                order.Id,
-                tenant.Id,
-                order.TotalAmount,
-                session.Table.DisplayNumber,
-                order.Status.ToString(),
-                order.CreatedAt);
+                existingOrder = await FindExistingOrderAsync(
+                    request.RequestId,
+                    cancellationToken);
+                if (existingOrder != null)
+                {
+                    EnsureRequestBelongsToTable(existingOrder, session.TableId);
+                    return ToCreatedResult(existingOrder, false);
+                }
+
+                throw;
+            }
+
+            order.Table = session.Table;
+            return ToCreatedResult(order, true);
         }
+
+        private async Task<Order?> FindExistingOrderAsync(
+            Guid requestId,
+            CancellationToken cancellationToken)
+        {
+            return await _db.Orders
+                .AsNoTracking()
+                .Include(x => x.Table)
+                .SingleOrDefaultAsync(
+                    x => x.ClientRequestId == requestId,
+                    cancellationToken);
+        }
+
+        private static void EnsureRequestBelongsToTable(Order order, Guid tableId)
+        {
+            if (order.TableId != tableId)
+                throw new InvalidOperationException("RequestId was already used for another table.");
+        }
+
+        private static OrderCreatedResult ToCreatedResult(Order order, bool isNew) =>
+            new(
+                order.Id,
+                order.TenantId,
+                order.TotalAmount,
+                order.Table.DisplayNumber,
+                order.Status.ToString(),
+                order.CreatedAt,
+                isNew);
+
+        private static bool IsUniqueConstraintViolation(DbUpdateException error) =>
+            error.InnerException is SqlException { Number: 2601 or 2627 };
 
         public async Task<PublicOrderStatusDto?> GetStatusAsync(
             string tenantSlug,
@@ -192,6 +264,7 @@ namespace QrOrder.Infrastructure.Services
                 order.TotalAmount,
                 order.CreatedAt,
                 order.Items.Select(i => new OrderItemDto(i.ProductNameSnapshot, i.Quantity, i.ItemNote)).ToList());
+
         }
     }
 }

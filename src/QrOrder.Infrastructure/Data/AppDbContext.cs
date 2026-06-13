@@ -34,6 +34,7 @@ namespace QrOrder.Infrastructure.Data
         public DbSet<Order> Orders => Set<Order>();
         public DbSet<OrderItem> OrderItems => Set<OrderItem>();
         public DbSet<ServiceCall> ServiceCalls => Set<ServiceCall>();
+        public DbSet<TenantBusinessHour> TenantBusinessHours => Set<TenantBusinessHour>();
 
 
 
@@ -73,6 +74,36 @@ namespace QrOrder.Infrastructure.Data
             modelBuilder.Entity<ServiceCall>()
                 .HasIndex(c => new { c.TenantId, c.Status, c.CreatedAt });
 
+            modelBuilder.Entity<TenantBusinessHour>()
+                .HasIndex(x => new { x.TenantId, x.DayOfWeek })
+                .IsUnique();
+
+            modelBuilder.Entity<TenantBusinessHour>()
+                .HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Tenant>()
+                .Property(x => x.TimeZoneId)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Tenant>()
+                .Property(x => x.PrimaryColor)
+                .HasMaxLength(7);
+
+            modelBuilder.Entity<Tenant>()
+                .Property(x => x.AccentColor)
+                .HasMaxLength(7);
+
+            modelBuilder.Entity<Tenant>()
+                .Property(x => x.LogoUrl)
+                .HasMaxLength(500);
+
+            modelBuilder.Entity<Tenant>()
+                .Property(x => x.HeroImageUrl)
+                .HasMaxLength(500);
+
             // Tenant unique
             modelBuilder.Entity<Tenant>()
                 .HasIndex(x => x.Slug)
@@ -96,9 +127,22 @@ namespace QrOrder.Infrastructure.Data
                 .Property(x => x.ImageUrl)
                 .HasMaxLength(500);
 
+            modelBuilder.Entity<Product>()
+                .Property(x => x.Ingredients)
+                .HasMaxLength(1500);
+
+            modelBuilder.Entity<Product>()
+                .Property(x => x.PortionInfo)
+                .HasMaxLength(150);
+
             modelBuilder.Entity<Order>()
                 .Property(x => x.TotalAmount)
                 .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(x => new { x.TenantId, x.ClientRequestId })
+                .IsUnique()
+                .HasFilter("[ClientRequestId] IS NOT NULL");
 
             modelBuilder.Entity<OrderItem>()
                 .Property(x => x.UnitPriceSnapshot)

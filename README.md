@@ -1,140 +1,106 @@
-# QR Sipariş Yönetim Sistemi
+# QR Siparis Yonetim Sistemi
 
-QR Sipariş Yönetim Sistemi, restoran ve kafe işletmeleri için geliştirilmiş çoklu işletme destekli bir sipariş yönetim uygulamasıdır. Müşteriler masaya özel QR kodu okutarak menüye ulaşabilir, sipariş oluşturabilir, garson çağırabilir ve sipariş durumunu gerçek zamanlı takip edebilir. Mutfak, servis ve admin ekranları ayrı rollerle yönetilir.
+Restoran ve kafeler icin gelistirilmis coklu isletme destekli QR menu ve siparis yonetim uygulamasidir. Musteriler masaya ozel QR kodu okutarak menuye ulasir, siparis verir, garson cagirir ve siparis durumunu gercek zamanli takip eder.
 
-## Özellikler
+## Ozellikler
 
-- Çoklu işletme mimarisi
-- Super Admin paneli ile yeni işletme, işletme admini, opsiyonel personel hesapları ve toplu masa oluşturma
-- Masaya özel QR menü erişimi
-- Mobil öncelikli müşteri menüsü
-- Sepet ve müşteri sipariş notu desteği
-- SignalR ile gerçek zamanlı sipariş bildirimi
-- Mutfak ekranında yeni ve hazırlanan siparişlerin takibi
-- Servis ekranında hazır siparişler ve garson çağrıları
-- Müşterinin garson çağırabilmesi
-- Admin panel üzerinden ürün, kategori, masa, kullanıcı ve işletme ayarları yönetimi
-- Sipariş raporu ve servis çağrısı geçmişi
-- JWT ile kimlik doğrulama
-- Rol bazlı yetkilendirme: SuperAdmin, Admin, Kitchen, Service
-- EF Core migration yapısı
-- MSSQL veritabanı
-- N-Tier katmanlı mimari
+- Coklu isletme ve tenant bazli veri izolasyonu
+- Super Admin panelinden isletme, admin, personel ve toplu masa olusturma
+- Masaya ozel QR kod ve guvenli masa oturumu
+- Mobil oncelikli musteri menusu ve sepet
+- Urun gorselleri, stok durumu ve menu siralamasi
+- Icerik, porsiyon, kalori, 14 alerjen grubu ve servis sicakligi bilgileri
+- Vegan, vejetaryen, alkol ve domuz kaynakli bilesen bildirimleri
+- Isletme bazli logo, kapak gorseli, renkler ve calisma saatleri
+- SignalR ile gercek zamanli siparis ve durum takibi
+- Mutfak ve servis icin ayri operasyon ekranlari
+- Ayirt edilebilir sesli siparis ve garson cagrisi bildirimleri
+- Musteri siparis iptali ve garson cagirma akisi
+- Admin panelinde siparis raporu ve servis cagrisi gecmisi
+- Tekrarlanan siparis isteklerine karsi idempotency korumasi
+- JWT, ASP.NET Core Identity ve rol bazli yetkilendirme
+- Rate limiting, health check, merkezi hata yonetimi ve dosya loglari
+- MSSQL yedekleme, geri yukleme testi ve production yayin araclari
 
-## Kullanılan Teknolojiler
+## Teknolojiler
 
 - ASP.NET Core 9
 - Entity Framework Core
 - MSSQL / SQL Server Express
 - SignalR
-- ASP.NET Core Identity
-- JWT Bearer Authentication
+- ASP.NET Core Identity ve JWT
 - Razor Pages
-- Vanilla JavaScript
-- CSS
+- Vanilla JavaScript ve CSS
 
-## Proje Yapısı
+## Katmanlar
 
 ```text
 src/
-  QrOrder.Domain/          Entity ve enum sınıfları
-  QrOrder.Application/     DTO, interface ve uygulama sözleşmeleri
-  QrOrder.Infrastructure/  EF Core, Identity, servisler ve migration dosyaları
-  QrOrder.Web/             API controller, Razor Pages, SignalR hub ve arayüz dosyaları
+  QrOrder.Domain/          Entity ve enum siniflari
+  QrOrder.Application/     DTO, interface ve uygulama sozlesmeleri
+  QrOrder.Infrastructure/  EF Core, Identity, servisler ve migration dosyalari
+  QrOrder.Web/             API, Razor Pages, SignalR ve arayuz dosyalari
 ```
 
-## Ana Ekranlar
+## Ekranlar
 
 ```text
-Super Admin:
-http://localhost:5140/super-admin
-
-Admin panel:
-http://localhost:5140/staff/admin
-
-Mutfak ekranı:
-http://localhost:5140/staff/kitchen
-
-Servis ekranı:
-http://localhost:5140/staff/service
-
-Örnek müşteri QR menüsü:
-http://localhost:5140/v/demo-cafe/t/84222936215c466d98c512d3d50947ed
+Super Admin:  http://localhost:5140/super-admin
+Admin:        http://localhost:5140/staff/admin
+Mutfak:       http://localhost:5140/staff/kitchen
+Servis:       http://localhost:5140/staff/service
+Health check: http://localhost:5140/health
 ```
 
-## Kullanım Senaryosu
-
-1. Super Admin panelinden yeni bir işletme, işletme admini, masa sayısı ve opsiyonel mutfak/servis hesapları oluşturulur.
-2. İşletme admini kendi paneline giriş yaparak kategori, ürün ve masa kayıtlarını oluşturur.
-3. Her masa için benzersiz QR menü linki üretilir.
-4. Müşteri QR kodu okutarak masaya özel menüyü açar ve sipariş oluşturur.
-5. Sipariş gerçek zamanlı olarak mutfak ve servis ekranlarına düşer.
-6. Mutfak sipariş durumunu günceller, servis hazır siparişleri ve garson çağrılarını takip eder.
-7. Admin panelinden sipariş geçmişi, servis çağrıları ve işletme ayarları yönetilir.
-
-## Demo Kullanıcılar
+Musteri menu adresleri isletme ve masa icin uretilen QR baglantisindan acilir:
 
 ```text
-Platform:
-platform
-
-Super Admin:
-superadmin@demo.com / SuperAdmin123!
-
-İşletme: demo-cafe
-
-Admin:
-admin@demo.com / Admin123!
-
-Mutfak:
-kitchen@demo.com / Kitchen123!
-
-Servis:
-service@demo.com / Service123!
+http://localhost:5140/v/{isletme-slug}/t/{masa-kodu}
 ```
 
-## Kurulum
+## Lokal Kurulum
 
-1. Solution dosyasını açın:
-
-```text
-QrOrder.sln
-```
-
-2. Lokal geliştirme ayarlarını şu dosyada yapılandırın:
-
-```text
-src/QrOrder.Web/appsettings.Development.json
-```
-
-Örnek:
-
-```json
-{
-  "PublicBaseUrl": "http://localhost:5140",
-  "ConnectionStrings": {
-    "Default": "Server=localhost\\SQLEXPRESS;Database=QrOrderDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True;Encrypt=False"
-  },
-  "Jwt": {
-    "Issuer": "QrOrder",
-    "Audience": "QrOrderStaff",
-    "Key": "local-development-secret-key"
-  },
-  "Seed": {
-    "DemoData": true
-  }
-}
-```
-
-3. Uygulamayı çalıştırın:
+1. `src/QrOrder.Web/appsettings.Development.json` dosyasini olusturun.
+2. Lokal MSSQL baglantisini ve en az 48 karakterlik gelistirme JWT anahtarini girin.
+3. Uygulamayi calistirin:
 
 ```powershell
 dotnet run --project src\QrOrder.Web\QrOrder.Web.csproj --launch-profile http
 ```
 
-Geliştirme ortamında EF Core migration dosyaları uygulama açılışında otomatik olarak uygulanır.
+Development ortaminda migration ve istege bagli demo seed acilista uygulanabilir. Lokal ayar dosyasi Git tarafindan takip edilmez.
 
-## Notlar
-- `appsettings.Development.json`, `bin`, `obj`, `.vs`, `logs` ve lokal test projeleri Git dışında bırakılmıştır.
-- Production ortamında güçlü bir JWT key ve gerçek SQL Server bağlantı bilgisi source control dışında tutulmalıdır.
-- Demo veriler geliştirme ortamında otomatik oluşturulur.
+## Demo Ortami
+
+Demo kullanicilar yalnizca `Seed:DemoData=true` oldugunda gelistirme ortaminda olusturulur. Production yapilandirmasi demo seed ile calismayi engeller. Demo hesap bilgileri kaynak kodda gercek musteri hesabi olarak kullanilmamalidir.
+
+## Production ve Pilot
+
+- [Production kurulumu](docs/PRODUCTION-KURULUM.md)
+- [Yedekleme ve geri yukleme](docs/YEDEKLEME-VE-GERI-YUKLEME.md)
+- [Pilot isletme kurulumu](docs/PILOT-ISLETME-KURULUMU.md)
+- [Pilot kabul ve teslim plani](docs/PILOT-KABUL-VE-TESLIM.md)
+
+Pilot on kontrolu:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\pilot\Test-PilotReadiness.ps1
+```
+
+GitHub guvenlik kontrolu:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\security\Test-GitHubSafety.ps1
+```
+
+## Veri Guvenligi
+
+Asagidaki veriler GitHub'a gonderilmez:
+
+- Production connection string ve JWT anahtari
+- Gercek personel hesaplari ve sifreleri
+- MSSQL veritabani ve yedek dosyalari
+- Upload edilen isletme ve urun gorselleri
+- Log, production artifact ve yerel ayar dosyalari
+
+Gercek isletme verileri production MSSQL veritabaninda, gorseller ise sunucunun deployment disindaki upload klasorunde saklanir.

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.RateLimiting;
 using QrOrder.Application.Orders;
 using QrOrder.Web.Realtime;
 
@@ -12,22 +13,26 @@ namespace QrOrder.Web.Controllers
         private readonly IPublicOrderService _orders;
         private readonly IHubContext<StaffOrdersHub> _staffHub;
         private readonly IHubContext<PublicOrdersHub> _publicHub;
+        private readonly ILogger<PublicOrdersController> _logger;
 
         public PublicOrdersController(
             IPublicOrderService orders,
             IHubContext<StaffOrdersHub> staffHub,
-            IHubContext<PublicOrdersHub> publicHub)
+            IHubContext<PublicOrdersHub> publicHub,
+            ILogger<PublicOrdersController> logger)
         {
             _orders = orders;
             _staffHub = staffHub;
             _publicHub = publicHub;
+            _logger = logger;
         }
 
         public record CreateOrderItem(Guid ProductId, int Quantity, string? Note);
-        public record CreateOrderRequest(string TenantSlug, string SessionToken, List<CreateOrderItem> Items, string? CustomerNote);
+        public record CreateOrderRequest(string TenantSlug, string SessionToken, Guid RequestId, List<CreateOrderItem> Items, string? CustomerNote);
         public record CancelOrderRequest(string SessionToken);
 
         [HttpPost]
+        [EnableRateLimiting("public-write")]
         public async Task<IActionResult> Create([FromBody] CreateOrderRequest req)
         {
             try
@@ -35,20 +40,55 @@ namespace QrOrder.Web.Controllers
                 var result = await _orders.CreateAsync(new QrOrder.Application.Orders.CreateOrderRequest(
                     req.TenantSlug,
                     req.SessionToken,
+                    req.RequestId,
                     req.Items.Select(i => new CreateOrderItemRequest(i.ProductId, i.Quantity, i.Note)).ToList(),
                     req.CustomerNote));
 
-                await _staffHub.Clients.Group($"tenant:{result.TenantId}")
-                    .SendAsync("OrderCreated", new
-                    {
-                        orderId = result.OrderId,
-                        tableNumber = result.TableNumber,
-                        total = result.Total,
-                        status = result.Status,
-                        createdAt = result.CreatedAt
-                    });
+                if (result.IsNew)
+                {
+                    _logger.LogInformation(
+                        "Order {OrderId} created for tenant {TenantId}, table {TableNumber}, request {RequestId}.",
+                        result.OrderId,
+                        result.TenantId,
+                        result.TableNumber,
+                        req.RequestId);
 
-                return Ok(new { orderId = result.OrderId, total = result.Total });
+                    try
+                    {
+                        await _staffHub.Clients.Group($"tenant:{result.TenantId}")
+                            .SendAsync("OrderCreated", new
+                            {
+                                orderId = result.OrderId,
+                                tableNumber = result.TableNumber,
+                                total = result.Total,
+                                status = result.Status,
+                                createdAt = result.CreatedAt
+                            });
+                    }
+                    catch (Exception error)
+                    {
+                        _logger.LogWarning(
+                            error,
+                            "Order {OrderId} was saved but the SignalR notification failed for tenant {TenantId}.",
+                            result.OrderId,
+                            result.TenantId);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Duplicate order request {RequestId} returned existing order {OrderId} for tenant {TenantId}.",
+                        req.RequestId,
+                        result.OrderId,
+                        result.TenantId);
+                }
+
+                return Ok(new
+                {
+                    orderId = result.OrderId,
+                    total = result.Total,
+                    duplicate = !result.IsNew
+                });
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -68,6 +108,7 @@ namespace QrOrder.Web.Controllers
         }
 
         [HttpPost("{tenantSlug}/{orderId:guid}/cancel")]
+        [EnableRateLimiting("public-write")]
         public async Task<IActionResult> Cancel(string tenantSlug, Guid orderId, [FromBody] CancelOrderRequest req)
         {
             try
@@ -82,8 +123,15 @@ namespace QrOrder.Web.Controllers
                     tableNumber = status.TableNumber
                 };
 
-                await _staffHub.Clients.Group($"tenant:{status.TenantId}").SendAsync("OrderStatusChanged", payload);
-                await _publicHub.Clients.Group($"order:{status.Id}").SendAsync("OrderStatusChanged", payload);
+                try
+                {
+                    await _staffHub.Clients.Group($"tenant:{status.TenantId}").SendAsync("OrderStatusChanged", payload);
+                    await _publicHub.Clients.Group($"order:{status.Id}").SendAsync("OrderStatusChanged", payload);
+                }
+                catch (Exception error)
+                {
+                    _logger.LogWarning(error, "Canceled order {OrderId} was saved but its SignalR notification failed.", status.Id);
+                }
 
                 return Ok(status);
             }

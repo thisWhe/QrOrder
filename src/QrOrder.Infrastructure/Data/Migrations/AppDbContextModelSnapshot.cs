@@ -183,6 +183,9 @@ namespace QrOrder.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -216,6 +219,10 @@ namespace QrOrder.Infrastructure.Data.Migrations
                     b.HasIndex("TableId");
 
                     b.HasIndex("TableSessionId");
+
+                    b.HasIndex("TenantId", "ClientRequestId")
+                        .IsUnique()
+                        .HasFilter("[ClientRequestId] IS NOT NULL");
 
                     b.ToTable("Orders");
                 });
@@ -262,8 +269,20 @@ namespace QrOrder.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("AllergenFlags")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Calories")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("ContainsAlcohol")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ContainsPork")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
@@ -272,19 +291,36 @@ namespace QrOrder.Infrastructure.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("Ingredients")
+                        .HasMaxLength(1500)
+                        .HasColumnType("nvarchar(1500)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsAvailable")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsVegan")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVegetarian")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PortionInfo")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.Property<decimal>("Price")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ServingTemperature")
+                        .HasColumnType("int");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -403,8 +439,17 @@ namespace QrOrder.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AccentColor")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("HeroImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -412,9 +457,21 @@ namespace QrOrder.Infrastructure.Data.Migrations
                     b.Property<bool>("IsOrderingEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PrimaryColor")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<bool>("ShowProductDetails")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -423,12 +480,46 @@ namespace QrOrder.Infrastructure.Data.Migrations
                     b.Property<int>("TableSessionHours")
                         .HasColumnType("int");
 
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Slug")
                         .IsUnique();
 
                     b.ToTable("Tenants");
+                });
+
+            modelBuilder.Entity("QrOrder.Domain.Entities.TenantBusinessHour", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeOnly>("CloseTime")
+                        .HasColumnType("time");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("OpenTime")
+                        .HasColumnType("time");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "DayOfWeek")
+                        .IsUnique();
+
+                    b.ToTable("TenantBusinessHours");
                 });
 
             modelBuilder.Entity("QrOrder.Infrastructure.Auth.ApplicationUser", b =>
@@ -620,6 +711,15 @@ namespace QrOrder.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Table");
+                });
+
+            modelBuilder.Entity("QrOrder.Domain.Entities.TenantBusinessHour", b =>
+                {
+                    b.HasOne("QrOrder.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("QrOrder.Domain.Entities.Order", b =>

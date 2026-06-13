@@ -12,8 +12,28 @@ obj/
 
 # Logs
 logs/
+backups/
+artifacts/
 src/QrOrder.Web/wwwroot/uploads/
 *.log
+
+# Temporary verification projects
+.security-check/
+.tenant-check/
+
+# Database files and exports
+*.bak
+*.mdf
+*.ldf
+*.bacpac
+*.sql.gz
+
+# Certificates and private keys
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
 
 # Local configuration / secrets
 src/QrOrder.Web/appsettings.Development.json
@@ -21,6 +41,13 @@ src/QrOrder.Web/appsettings.Local.json
 *.Development.json
 *.Local.json
 .env
+.env.*
+!.env.example
+!*.env.example
+production.env
+deploy/production.env
+secrets.json
+*.secrets.json
 
 # Local test/scaffold projects not part of the main solution
 TestApi/

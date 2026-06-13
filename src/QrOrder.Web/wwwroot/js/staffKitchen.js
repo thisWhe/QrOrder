@@ -19,6 +19,9 @@
             preparingOrders: [],
             loading: false,
             realtimeConnected: false,
+            realtimeConnecting: false,
+            reconnectAttempt: 0,
+            reconnectTimer: null,
             socket: null,
             error: "",
             info: ""
@@ -34,16 +37,38 @@
     }
 
     function clearSession(state) {
+        if (state.reconnectTimer) {
+            window.clearTimeout(state.reconnectTimer);
+        }
+        if (state.socket) {
+            state.socket.close();
+        }
+
         state.token = "";
+        state.reconnectTimer = null;
+        state.realtimeConnecting = false;
+        state.reconnectAttempt = 0;
         state.socket = null;
         state.realtimeConnected = false;
         localStorage.removeItem(storageKey);
     }
 
+    async function readErrorResponse(response) {
+        const text = await response.text();
+        if (!text) return response.statusText || "Islem tamamlanamadi.";
+
+        try {
+            const problem = JSON.parse(text);
+            return problem.detail || problem.title || response.statusText;
+        } catch {
+            return text;
+        }
+    }
+
     async function requestJson(url, options) {
         const response = await fetch(url, options);
         if (!response.ok) {
-            throw new Error(friendlyHttpError(response.status, await response.text() || response.statusText));
+            throw new Error(friendlyHttpError(response.status, await readErrorResponse(response)));
         }
 
         if (response.status === 204) return null;
@@ -54,6 +79,7 @@
         const text = String(message || "");
         if (status === 401 || /unauthorized/i.test(text)) return "Oturum gecersiz veya giris bilgileri hatali.";
         if (status === 403) return "Bu islem icin yetkiniz yok.";
+        if (status === 429) return "Cok fazla deneme yapildi. Bir sure bekleyip tekrar deneyin.";
         if (status === 409) return "Bu siparisin durumu baska bir ekrandan degismis olabilir. Listeyi yenileyin.";
         if (status >= 500 || isTechnicalMessage(text)) return "Sunucuda beklenmeyen bir hata olustu.";
         return text.length > 160 ? "Islem tamamlanamadi. Lutfen tekrar deneyin." : text || "Islem tamamlanamadi.";
@@ -186,8 +212,35 @@
         return `${JSON.stringify(payload)}\x1e`;
     }
 
+    function scheduleReconnect(state) {
+        if (!state.token || state.reconnectTimer || state.realtimeConnecting || state.socket) return;
+
+        const delays = [1000, 2000, 5000, 10000, 20000, 30000];
+        const delay = delays[Math.min(state.reconnectAttempt, delays.length - 1)];
+        state.reconnectAttempt += 1;
+        state.reconnectTimer = window.setTimeout(() => {
+            state.reconnectTimer = null;
+            connectRealtime(state);
+        }, delay);
+    }
+
+    function markRealtimeConnected(state) {
+        const wasConnected = state.realtimeConnected;
+        state.realtimeConnected = true;
+        state.reconnectAttempt = 0;
+        if (!wasConnected) {
+            loadOrders(state);
+        } else {
+            render(state);
+        }
+    }
+
     async function connectRealtime(state) {
-        if (!state.token || state.socket) return;
+        if (!state.token || state.socket || state.realtimeConnecting) return;
+
+        state.realtimeConnecting = true;
+        state.realtimeConnected = false;
+        render(state);
 
         try {
             const result = await negotiate(state);
@@ -196,6 +249,7 @@
             const socket = new WebSocket(`${protocol}://${window.location.host}/hubs/staff-orders?id=${encodeURIComponent(token)}&access_token=${encodeURIComponent(state.token)}`);
 
             state.socket = socket;
+            state.realtimeConnecting = false;
 
             socket.addEventListener("open", () => {
                 socket.send(signalRMessage({ protocol: "json", version: 1 }));
@@ -204,31 +258,46 @@
             socket.addEventListener("message", event => {
                 const messages = String(event.data).split("\x1e").filter(Boolean);
                 for (const raw of messages) {
-                    const message = JSON.parse(raw);
+                    let message;
+                    try {
+                        message = JSON.parse(raw);
+                    } catch {
+                        continue;
+                    }
+
                     if (message.type === 1 && (message.target === "OrderCreated" || message.target === "OrderStatusChanged")) {
                         loadOrders(state);
-                    } else {
-                        state.realtimeConnected = true;
-                        render(state);
+                    } else if (message.type === undefined) {
+                        markRealtimeConnected(state);
+                    } else if (message.type === 7) {
+                        socket.close();
                     }
                 }
             });
 
             socket.addEventListener("close", () => {
-                state.socket = null;
+                if (state.socket === socket) state.socket = null;
                 state.realtimeConnected = false;
                 render(state);
-
-                if (state.token) {
-                    window.setTimeout(() => connectRealtime(state), 3000);
-                }
+                scheduleReconnect(state);
             });
 
             socket.addEventListener("error", () => {
                 state.realtimeConnected = false;
+                socket.close();
             });
-        } catch {
+        } catch (error) {
+            state.realtimeConnecting = false;
             state.realtimeConnected = false;
+            if (isAuthError(error.message)) {
+                clearSession(state);
+                state.error = "Oturum gecersiz. Tekrar giris yapin.";
+                render(state);
+                return;
+            }
+
+            render(state);
+            scheduleReconnect(state);
         }
     }
 
@@ -321,7 +390,8 @@
         header.className = "kitchen-header";
 
         const titleWrap = document.createElement("div");
-        titleWrap.innerHTML = `<h1 class="kitchen-title">Mutfak Ekrani</h1><div class="kitchen-meta"><span class="status-dot ${state.realtimeConnected ? "connected" : ""}"></span><span>${state.realtimeConnected ? "Canli" : "Beklemede"}</span><span>${state.info || ""}</span></div>`;
+        const realtimeLabel = state.realtimeConnected ? "Canli" : (state.realtimeConnecting ? "Baglaniyor" : "Yeniden baglaniyor");
+        titleWrap.innerHTML = `<h1 class="kitchen-title">Mutfak Ekrani</h1><div class="kitchen-meta"><span class="status-dot ${state.realtimeConnected ? "connected" : ""}"></span><span>${realtimeLabel}</span><span>${state.info || ""}</span></div>`;
 
         const toolbar = document.createElement("div");
         toolbar.className = "toolbar";
@@ -475,6 +545,22 @@
             loadOrders(state);
             connectRealtime(state);
         }
+
+        window.addEventListener("online", () => {
+            if (!state.token || state.realtimeConnected) return;
+            if (state.reconnectTimer) {
+                window.clearTimeout(state.reconnectTimer);
+                state.reconnectTimer = null;
+            }
+            connectRealtime(state);
+        });
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible" && state.token) {
+                loadOrders(state);
+                if (!state.socket) connectRealtime(state);
+            }
+        });
     }
 
     document.addEventListener("DOMContentLoaded", init);

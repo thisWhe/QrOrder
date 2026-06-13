@@ -9,7 +9,12 @@ namespace QrOrder.Web.Seed
 {
     public static class DBSeeder
     {
-        public static async Task SeedAsync(IServiceProvider sp, bool seedDemoData)
+        public static async Task SeedAsync(
+            IServiceProvider sp,
+            bool applyMigrations,
+            bool seedDemoData,
+            string? bootstrapSuperAdminEmail = null,
+            string? bootstrapSuperAdminPassword = null)
         {
             using var scope = sp.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -17,12 +22,40 @@ namespace QrOrder.Web.Seed
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-            await db.Database.MigrateAsync();
+            if (applyMigrations)
+                await db.Database.MigrateAsync();
 
             foreach (var role in new[] { "SuperAdmin", "Admin", "Kitchen", "Service" })
             {
                 if (!await roleManager.RoleExistsAsync(role))
                     await roleManager.CreateAsync(new IdentityRole<Guid>(role));
+            }
+
+            if (!string.IsNullOrWhiteSpace(bootstrapSuperAdminEmail) &&
+                !string.IsNullOrWhiteSpace(bootstrapSuperAdminPassword))
+            {
+                var bootstrapPlatformTenant = await db.Tenants.FirstOrDefaultAsync(t => t.Slug == "platform");
+                if (bootstrapPlatformTenant == null)
+                {
+                    bootstrapPlatformTenant = new Tenant
+                    {
+                        Name = "Platform",
+                        Slug = "platform",
+                        IsActive = true,
+                        IsOrderingEnabled = false,
+                        TableSessionHours = 12
+                    };
+                    db.Tenants.Add(bootstrapPlatformTenant);
+                    await db.SaveChangesAsync();
+                }
+
+                tenantContext.TenantId = bootstrapPlatformTenant.Id;
+                await EnsureStaffUserAsync(
+                    userManager,
+                    bootstrapPlatformTenant.Id,
+                    bootstrapSuperAdminEmail.Trim().ToLowerInvariant(),
+                    bootstrapSuperAdminPassword,
+                    "SuperAdmin");
             }
 
             if (!seedDemoData)

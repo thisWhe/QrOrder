@@ -13,13 +13,16 @@ namespace QrOrder.Web.Controllers
     {
         private readonly IStaffServiceCallService _serviceCalls;
         private readonly IHubContext<StaffOrdersHub> _staffHub;
+        private readonly ILogger<StaffServiceCallsController> _logger;
 
         public StaffServiceCallsController(
             IStaffServiceCallService serviceCalls,
-            IHubContext<StaffOrdersHub> staffHub)
+            IHubContext<StaffOrdersHub> staffHub,
+            ILogger<StaffServiceCallsController> logger)
         {
             _serviceCalls = serviceCalls;
             _staffHub = staffHub;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -37,7 +40,14 @@ namespace QrOrder.Web.Controllers
             var tenantId = User.FindFirst("tenant_id")?.Value;
             if (!string.IsNullOrWhiteSpace(tenantId))
             {
-                await _staffHub.Clients.Group($"tenant:{tenantId}").SendAsync("ServiceCallCompleted", call);
+                try
+                {
+                    await _staffHub.Clients.Group($"tenant:{tenantId}").SendAsync("ServiceCallCompleted", call);
+                }
+                catch (Exception error)
+                {
+                    _logger.LogWarning(error, "Service call {ServiceCallId} was completed but its SignalR notification failed.", call.Id);
+                }
             }
 
             return Ok(call);

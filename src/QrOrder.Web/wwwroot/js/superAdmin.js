@@ -44,10 +44,22 @@
         localStorage.removeItem(storageKey);
     }
 
+    async function readErrorResponse(response) {
+        const text = await response.text();
+        if (!text) return response.statusText || "Islem tamamlanamadi.";
+
+        try {
+            const problem = JSON.parse(text);
+            return problem.detail || problem.title || response.statusText;
+        } catch {
+            return text;
+        }
+    }
+
     async function requestJson(url, options) {
         const response = await fetch(url, options);
         if (!response.ok) {
-            throw new Error(friendlyHttpError(response.status, await response.text() || response.statusText));
+            throw new Error(friendlyHttpError(response.status, await readErrorResponse(response)));
         }
 
         if (response.status === 204) return null;
@@ -58,6 +70,7 @@
         const text = String(message || "");
         if (status === 401 || /unauthorized/i.test(text)) return "Oturum gecersiz veya giris bilgileri hatali.";
         if (status === 403) return "Bu islem icin yetkiniz yok.";
+        if (status === 429) return "Cok fazla deneme yapildi. Bir sure bekleyip tekrar deneyin.";
         if (status === 409) {
             if (/slug/i.test(text)) return "Bu isletme slug degeri zaten kullaniliyor.";
             if (/email|user/i.test(text)) return "Bu kullanici e-postasi zaten kullaniliyor.";

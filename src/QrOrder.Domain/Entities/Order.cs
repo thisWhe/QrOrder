@@ -12,6 +12,7 @@ namespace QrOrder.Domain.Entities
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public Guid TenantId { get; set; }
+        public Guid? ClientRequestId { get; set; }
 
         public Guid TableId { get; set; }
         public Table Table { get; set; } = default!;

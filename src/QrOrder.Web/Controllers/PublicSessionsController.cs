@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using QrOrder.Application.Public;
 
 namespace QrOrder.Web.Controllers
@@ -18,6 +19,7 @@ namespace QrOrder.Web.Controllers
         public record ValidateSessionRequest(string TenantSlug, string TableCode, string SessionToken);
 
         [HttpPost]
+        [EnableRateLimiting("public-write")]
         public async Task<IActionResult> Create(CreateSessionRequest req)
         {
             var session = await _sessions.CreateAsync(req.TenantSlug, req.TableCode);
@@ -32,6 +34,7 @@ namespace QrOrder.Web.Controllers
         }
 
         [HttpPost("validate")]
+        [EnableRateLimiting("public-write")]
         public async Task<IActionResult> Validate(ValidateSessionRequest req)
         {
             var session = await _sessions.ValidateAsync(req.TenantSlug, req.TableCode, req.SessionToken);

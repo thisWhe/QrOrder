@@ -9,10 +9,10 @@ namespace QrOrder.Web.Realtime
         public override async Task OnConnectedAsync()
         {
             var tenantId = Context.User?.FindFirst("tenant_id")?.Value;
-            if (!string.IsNullOrWhiteSpace(tenantId))
-            {
-                await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
-            }
+            if (!Guid.TryParse(tenantId, out var parsedTenantId) || parsedTenantId == Guid.Empty)
+                throw new HubException("Tenant claim is missing or invalid.");
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{parsedTenantId}");
 
             await base.OnConnectedAsync();
         }

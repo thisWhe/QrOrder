@@ -42,11 +42,20 @@ namespace QrOrder.Infrastructure.Data
 
             foreach (var entry in db.ChangeTracker.Entries<ITenantEntity>())
             {
-                // Sadece Added için set ediyoruz (Update'de tenant değiştirilmesin)
                 if (entry.State == EntityState.Added)
                 {
                     if (entry.Entity.TenantId == Guid.Empty)
                         entry.Entity.TenantId = tenantId;
+
+                    continue;
+                }
+
+                var tenantProperty = entry.Property(nameof(ITenantEntity.TenantId));
+                if (entry.State == EntityState.Modified &&
+                    tenantProperty.IsModified &&
+                    !Equals(tenantProperty.OriginalValue, tenantProperty.CurrentValue))
+                {
+                    throw new InvalidOperationException("TenantId cannot be changed after an entity is created.");
                 }
             }
         }

@@ -1,5 +1,11 @@
 (function () {
     const storageKey = "staff:admin";
+    const allergenOptions = [
+        [1, "Gluten"], [2, "Kabuklular"], [4, "Yumurta"], [8, "Balik"],
+        [16, "Yer fistigi"], [32, "Soya"], [64, "Sut"], [128, "Sert kabuklu yemisler"],
+        [256, "Kereviz"], [512, "Hardal"], [1024, "Susam"], [2048, "Sulfit"],
+        [4096, "Acibakla"], [8192, "Yumusakcalar"]
+    ];
 
     function createState(root) {
         const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
@@ -10,7 +16,22 @@
             password: "",
             token: saved.token || "",
             tenant: null,
-            tenantForm: { name: "", slug: "", isOrderingEnabled: true, tableSessionHours: 12 },
+            tenantForm: {
+                name: "",
+                slug: "",
+                isOrderingEnabled: true,
+                showProductDetails: true,
+                tableSessionHours: 12,
+                primaryColor: "#3D2113",
+                accentColor: "#FFB51B",
+                logoUrl: "",
+                heroImageUrl: "",
+                logoFile: null,
+                heroImageFile: null,
+                logoPreviewUrl: "",
+                heroImagePreviewUrl: "",
+                businessHours: defaultBusinessHours()
+            },
             activeTab: "products",
             categories: [],
             products: [],
@@ -19,6 +40,7 @@
             serviceCalls: [],
             users: [],
             tableSearch: "",
+            productFilter: "active",
             categoryForm: emptyCategoryForm(),
             productForm: emptyProductForm(),
             tableForm: { displayNumber: "" },
@@ -34,12 +56,30 @@
         return { id: "", name: "", sortOrder: 0, isActive: true };
     }
 
+    function defaultBusinessHours() {
+        return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+            dayOfWeek,
+            isOpen: true,
+            openTime: "00:00",
+            closeTime: "00:00"
+        }));
+    }
+
     function emptyProductForm() {
         return {
             id: "",
             categoryId: "",
             name: "",
             description: "",
+            ingredients: "",
+            portionInfo: "",
+            calories: "",
+            allergenFlags: 0,
+            containsAlcohol: false,
+            containsPork: false,
+            isVegetarian: false,
+            isVegan: false,
+            servingTemperature: 0,
             imageUrl: "",
             imageFile: null,
             imagePreviewUrl: "",
@@ -71,10 +111,22 @@
         localStorage.removeItem(storageKey);
     }
 
+    async function readErrorResponse(response) {
+        const text = await response.text();
+        if (!text) return response.statusText || "Islem tamamlanamadi.";
+
+        try {
+            const problem = JSON.parse(text);
+            return problem.detail || problem.title || response.statusText;
+        } catch {
+            return text;
+        }
+    }
+
     async function requestJson(url, options) {
         const response = await fetch(url, options);
         if (!response.ok) {
-            throw new Error(friendlyHttpError(response.status, await response.text() || response.statusText));
+            throw new Error(friendlyHttpError(response.status, await readErrorResponse(response)));
         }
 
         if (response.status === 204) return null;
@@ -92,8 +144,13 @@
             return "Bu islem icin yetkiniz yok.";
         }
 
+        if (status === 429) {
+            return "Cok fazla deneme yapildi. Bir sure bekleyip tekrar deneyin.";
+        }
+
         if (status === 409) {
             if (/active orders/i.test(text)) return "Bu masada aktif siparis var. Once siparisi tamamlayin veya iptal edin.";
+            if (/product category is inactive/i.test(text)) return "Urunun kategorisi pasif. Once kategoriyi aktif edin.";
             if (/displaynumber already exists/i.test(text)) return "Bu masa numarasi zaten kullaniliyor.";
             if (/already exists|duplicate|unique/i.test(text)) return "Bu kayit zaten var.";
             return "Bu islem mevcut verilerle cakisti.";
@@ -122,6 +179,7 @@
         if (isAuthError(text)) return "Oturum gecersiz. Tekrar giris yapin.";
         if (/failed to fetch|network/i.test(text)) return "Sunucuya ulasilamadi. Uygulamanin calistigindan emin olun.";
         if (/active orders/i.test(text)) return "Bu masada aktif siparis var. Once siparisi tamamlayin veya iptal edin.";
+        if (/product category is inactive/i.test(text)) return "Urunun kategorisi pasif. Once kategoriyi aktif edin.";
         if (/displaynumber already exists/i.test(text)) return "Bu masa numarasi zaten kullaniliyor.";
         if (/password/i.test(text) && /invalid|requires|too short|failed|error/i.test(text)) return "Sifre kurallara uygun degil. Daha guclu bir sifre deneyin.";
         if (/already exists|duplicate|unique/i.test(text)) return "Bu kayit zaten var.";
@@ -214,7 +272,24 @@
                 name: tenant.name || "",
                 slug: tenant.slug || "",
                 isOrderingEnabled: tenant.isOrderingEnabled !== false,
-                tableSessionHours: tenant.tableSessionHours || 12
+                showProductDetails: tenant.showProductDetails !== false,
+                tableSessionHours: tenant.tableSessionHours || 12,
+                primaryColor: tenant.primaryColor || "#3D2113",
+                accentColor: tenant.accentColor || "#FFB51B",
+                logoUrl: tenant.logoUrl || "",
+                heroImageUrl: tenant.heroImageUrl || "",
+                logoFile: null,
+                heroImageFile: null,
+                logoPreviewUrl: "",
+                heroImagePreviewUrl: "",
+                businessHours: Array.isArray(tenant.businessHours) && tenant.businessHours.length === 7
+                    ? tenant.businessHours.map(hour => ({
+                        dayOfWeek: Number(hour.dayOfWeek),
+                        isOpen: hour.isOpen !== false,
+                        openTime: String(hour.openTime || "00:00").slice(0, 5),
+                        closeTime: String(hour.closeTime || "00:00").slice(0, 5)
+                    }))
+                    : defaultBusinessHours()
             };
             state.categories = categories;
             state.products = products;
@@ -320,6 +395,15 @@
             categoryId: state.productForm.categoryId,
             name: state.productForm.name,
             description: state.productForm.description || null,
+            ingredients: state.productForm.ingredients || null,
+            portionInfo: state.productForm.portionInfo || null,
+            calories: state.productForm.calories === "" ? null : Number(state.productForm.calories),
+            allergenFlags: Number(state.productForm.allergenFlags || 0),
+            containsAlcohol: Boolean(state.productForm.containsAlcohol),
+            containsPork: Boolean(state.productForm.containsPork),
+            isVegetarian: Boolean(state.productForm.isVegetarian || state.productForm.isVegan),
+            isVegan: Boolean(state.productForm.isVegan),
+            servingTemperature: Number(state.productForm.servingTemperature || 0),
             price: Number(String(state.productForm.price).replace(",", ".")),
             sortOrder: Number(state.productForm.sortOrder || 0),
             isActive: Boolean(state.productForm.isActive),
@@ -340,13 +424,7 @@
                 const created = await authorizedJson(state, "/staff/products", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        categoryId: body.categoryId,
-                        name: body.name,
-                        description: body.description,
-                        price: body.price,
-                        sortOrder: body.sortOrder
-                    })
+                    body: JSON.stringify(body)
                 });
                 productId = created.id;
                 state.success = "Urun eklendi.";
@@ -455,6 +533,52 @@
         }
     }
 
+    async function archiveProduct(state, product) {
+        const confirmed = window.confirm(
+            `${product.name} menuden kaldirilsin mi?\n\n` +
+            "Urun arsive tasinir ve musteri menusunde gorunmez. Daha sonra tekrar aktiflestirebilirsiniz."
+        );
+        if (!confirmed) return;
+
+        state.error = "";
+        state.success = "";
+
+        try {
+            await authorizedJson(state, `/staff/products/${encodeURIComponent(product.id)}/archive`, {
+                method: "PATCH"
+            });
+
+            if (state.productForm.id === product.id) {
+                resetProductForm(state);
+            }
+
+            state.success = "Urun arsive tasindi ve musteri menusunden kaldirildi.";
+
+            await loadAll(state);
+        } catch (error) {
+            state.error = contextError("Urun arsivlenemedi", error.message);
+            render(state);
+        }
+    }
+
+    async function restoreProduct(state, product) {
+        state.error = "";
+        state.success = "";
+
+        try {
+            await authorizedJson(state, `/staff/products/${encodeURIComponent(product.id)}/restore`, {
+                method: "PATCH"
+            });
+
+            state.productFilter = "active";
+            state.success = "Urun tekrar aktif edildi ve stokta var olarak isaretlendi.";
+            await loadAll(state);
+        } catch (error) {
+            state.error = contextError("Urun tekrar aktif edilemedi", error.message);
+            render(state);
+        }
+    }
+
     async function createTable(state) {
         state.error = "";
         state.success = "";
@@ -492,6 +616,19 @@
             return;
         }
 
+        if (!/^#[0-9A-Fa-f]{6}$/.test(state.tenantForm.primaryColor) ||
+            !/^#[0-9A-Fa-f]{6}$/.test(state.tenantForm.accentColor)) {
+            state.error = "Tema renkleri gecersiz.";
+            render(state);
+            return;
+        }
+
+        if (state.tenantForm.businessHours.some(hour => hour.isOpen && (!hour.openTime || !hour.closeTime))) {
+            state.error = "Acik gunler icin acilis ve kapanis saati zorunlu.";
+            render(state);
+            return;
+        }
+
         try {
             await authorizedJson(state, "/staff/tenant/settings", {
                 method: "PUT",
@@ -499,14 +636,54 @@
                 body: JSON.stringify({
                     name: state.tenantForm.name,
                     isOrderingEnabled: Boolean(state.tenantForm.isOrderingEnabled),
-                    tableSessionHours
+                    showProductDetails: Boolean(state.tenantForm.showProductDetails),
+                    tableSessionHours,
+                    primaryColor: state.tenantForm.primaryColor,
+                    accentColor: state.tenantForm.accentColor,
+                    businessHours: state.tenantForm.businessHours.map(hour => ({
+                        dayOfWeek: Number(hour.dayOfWeek),
+                        isOpen: Boolean(hour.isOpen),
+                        openTime: `${hour.openTime}:00`,
+                        closeTime: `${hour.closeTime}:00`
+                    }))
                 })
             });
 
-            state.success = "Isletme ayarlari guncellendi.";
+            if (state.tenantForm.logoFile) {
+                await uploadTenantBrandingImage(state, "logo", state.tenantForm.logoFile);
+            }
+            if (state.tenantForm.heroImageFile) {
+                await uploadTenantBrandingImage(state, "hero", state.tenantForm.heroImageFile);
+            }
+
+            if (state.tenantForm.logoPreviewUrl) URL.revokeObjectURL(state.tenantForm.logoPreviewUrl);
+            if (state.tenantForm.heroImagePreviewUrl) URL.revokeObjectURL(state.tenantForm.heroImagePreviewUrl);
+            state.success = "Isletme ayarlari ve tema guncellendi.";
             await loadAll(state);
         } catch (error) {
             state.error = contextError("Ayarlar kaydedilemedi", error.message);
+            render(state);
+        }
+    }
+
+    async function uploadTenantBrandingImage(state, imageType, file) {
+        const form = new FormData();
+        form.append("image", file);
+        return await authorizedJson(state, `/staff/tenant/branding/${encodeURIComponent(imageType)}`, {
+            method: "POST",
+            body: form
+        });
+    }
+
+    async function deleteTenantBrandingImage(state, imageType) {
+        try {
+            await authorizedJson(state, `/staff/tenant/branding/${encodeURIComponent(imageType)}`, {
+                method: "DELETE"
+            });
+            state.success = imageType === "logo" ? "Isletme logosu kaldirildi." : "Kapak gorseli kaldirildi.";
+            await loadAll(state);
+        } catch (error) {
+            state.error = contextError("Gorsel kaldirilamadi", error.message);
             render(state);
         }
     }
@@ -690,7 +867,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(await response.text() || response.statusText);
+            throw new Error(await readErrorResponse(response));
         }
 
         return await response.blob();
@@ -1061,34 +1238,72 @@
     }
 
     function renderSetupGuide(state) {
-        const hasMissingSetup = state.categories.length === 0 || state.products.length === 0 || state.tables.length === 0;
+        const setupItems = [
+            {
+                title: "Kategori ekle",
+                done: state.categories.length > 0,
+                description: "Kahvalti, Icecek, Tatli gibi menu bolumleri.",
+                tab: "categories"
+            },
+            {
+                title: "Urun ekle",
+                done: state.products.some(product => product.isActive && product.isAvailable && !product.isArchived),
+                description: "En az bir aktif ve siparis edilebilir urun ekleyin.",
+                tab: state.categories.length === 0 ? "categories" : "products"
+            },
+            {
+                title: "Masa QR olustur",
+                done: state.tables.length > 0 && state.tables.every(table => Boolean(table.qrUrl)),
+                description: "Her masa icin benzersiz QR linkini kontrol edin.",
+                tab: "tables"
+            },
+            {
+                title: "Markayi ayarla",
+                done: Boolean(state.tenantForm.logoUrl && state.tenantForm.heroImageUrl),
+                description: "Isletme logosu, kapak gorseli ve renkleri tamamlayin.",
+                tab: "settings"
+            },
+            {
+                title: "Personeli hazirla",
+                done: hasUserRole(state, "Kitchen") && hasUserRole(state, "Service"),
+                description: "En az bir mutfak ve bir servis hesabi olusturun.",
+                tab: "users"
+            },
+            {
+                title: "Test siparisi ver",
+                done: state.orders.length > 0,
+                description: "QR menuden siparis verip mutfak ve servis akisini tamamlayin.",
+                tab: state.tables.length === 0 ? "tables" : "orders"
+            }
+        ];
+        const completedCount = setupItems.filter(item => item.done).length;
+        const hasMissingSetup = completedCount < setupItems.length;
         const panel = document.createElement("section");
         panel.className = `setup-guide ${hasMissingSetup ? "" : "complete"}`;
 
         if (!hasMissingSetup) {
-            panel.innerHTML = "<div><strong>Kurulum tamam</strong><p class=\"muted\">Kategori, urun ve masa kayitlari hazir. QR linklerini masalara yerlestirebilirsiniz.</p></div>";
+            panel.innerHTML = "<div><strong>Pilot kurulumu tamam</strong><p class=\"muted\">Menu, marka, personel, masalar ve test siparisi hazir. QR kodlari kullanima alabilirsiniz.</p></div>";
             return panel;
         }
 
-        panel.innerHTML = "<div><strong>Ilk kurulum</strong><p class=\"muted\">Musteri menusu acilmadan once asagidaki temel kayitlari tamamlayin.</p></div>";
+        panel.innerHTML = `<div><strong>Pilot kurulumu: ${completedCount}/${setupItems.length}</strong><p class="muted">Isletmeyi musteri kullanimina acmadan once tum adimlari tamamlayin.</p></div>`;
 
         const steps = document.createElement("div");
         steps.className = "setup-steps";
-        steps.appendChild(setupStep("1", "Kategori ekle", state.categories.length > 0, "Kahvalti, Icecek, Tatli gibi menu bolumleri.", () => {
-            state.activeTab = "categories";
-            render(state);
-        }));
-        steps.appendChild(setupStep("2", "Urun ekle", state.products.length > 0, "Urunler aktif bir kategoriye bagli olmalidir.", () => {
-            state.activeTab = state.categories.length === 0 ? "categories" : "products";
-            render(state);
-        }));
-        steps.appendChild(setupStep("3", "Masa QR olustur", state.tables.length > 0, "Her masa icin benzersiz QR linki uretilir.", () => {
-            state.activeTab = "tables";
-            render(state);
-        }));
+        setupItems.forEach((item, index) => {
+            steps.appendChild(setupStep(String(index + 1), item.title, item.done, item.description, () => {
+                state.activeTab = item.tab;
+                render(state);
+            }));
+        });
 
         panel.appendChild(steps);
         return panel;
+    }
+
+    function hasUserRole(state, role) {
+        const expectedRole = role.toLocaleLowerCase("en-US");
+        return state.users.some(user => Array.isArray(user.roles) && user.roles.some(userRole => String(userRole).toLocaleLowerCase("en-US") === expectedRole));
     }
 
     function setupStep(number, title, done, description, onClick) {
@@ -1190,6 +1405,50 @@
         }
         body.appendChild(field("Urun adi", input(state.productForm.name, value => state.productForm.name = value)));
         body.appendChild(field("Aciklama", textarea(state.productForm.description, value => state.productForm.description = value)));
+        body.appendChild(field("Servis sicakligi", select(String(state.productForm.servingTemperature), [
+            ["0", "Belirtilmedi"],
+            ["1", "Sicak"],
+            ["2", "Soguk"],
+            ["3", "Sicak veya soguk"]
+        ], value => state.productForm.servingTemperature = Number(value || 0))));
+
+        const detailTitle = document.createElement("div");
+        detailTitle.className = "form-section-title";
+        detailTitle.innerHTML = "<strong>Icerik ve besin bilgileri</strong><span class=\"muted\">Istege baglidir. Girilen bilgiler musteri menusunde gosterilir.</span>";
+        body.appendChild(detailTitle);
+        body.appendChild(field("Temel icerikler", textarea(state.productForm.ingredients, value => state.productForm.ingredients = value)));
+
+        const nutritionGrid = document.createElement("div");
+        nutritionGrid.className = "product-nutrition-grid";
+        nutritionGrid.appendChild(field("Porsiyon bilgisi", input(state.productForm.portionInfo, value => state.productForm.portionInfo = value)));
+        nutritionGrid.appendChild(field("Enerji (kcal)", input(state.productForm.calories, value => state.productForm.calories = value, "number", "1")));
+        body.appendChild(nutritionGrid);
+
+        const allergenTitle = document.createElement("strong");
+        allergenTitle.className = "field-group-label";
+        allergenTitle.textContent = "Alerjenler";
+        body.appendChild(allergenTitle);
+        const allergenGrid = document.createElement("div");
+        allergenGrid.className = "product-option-grid";
+        for (const [flag, label] of allergenOptions) {
+            allergenGrid.appendChild(checkboxOption(label, (Number(state.productForm.allergenFlags) & flag) === flag, checked => {
+                const current = Number(state.productForm.allergenFlags || 0);
+                state.productForm.allergenFlags = checked ? current | flag : current & ~flag;
+            }));
+        }
+        body.appendChild(allergenGrid);
+
+        const dietaryGrid = document.createElement("div");
+        dietaryGrid.className = "product-option-grid product-dietary-grid";
+        dietaryGrid.appendChild(checkboxOption("Alkol icerir", state.productForm.containsAlcohol, checked => state.productForm.containsAlcohol = checked));
+        dietaryGrid.appendChild(checkboxOption("Domuz kaynakli bilesen icerir", state.productForm.containsPork, checked => state.productForm.containsPork = checked));
+        dietaryGrid.appendChild(checkboxOption("Vejetaryen", state.productForm.isVegetarian, checked => state.productForm.isVegetarian = checked));
+        dietaryGrid.appendChild(checkboxOption("Vegan", state.productForm.isVegan, checked => {
+            state.productForm.isVegan = checked;
+            if (checked) state.productForm.isVegetarian = true;
+            render(state);
+        }));
+        body.appendChild(dietaryGrid);
 
         const imageInput = document.createElement("input");
         imageInput.type = "file";
@@ -1281,7 +1540,7 @@
     }
 
     function productListPanel(state) {
-        const panel = panelShell("Urun Listesi", "Menude gorunen ve pasif urunleri birlikte takip edin.");
+        const panel = panelShell("Urun Listesi", "Satistaki, stokta olmayan ve arsivlenen urunleri ayri takip edin.");
         const body = panel.querySelector(".panel-body");
 
         if (state.products.length === 0) {
@@ -1289,8 +1548,48 @@
             return panel;
         }
 
+        const filters = [
+            {
+                id: "active",
+                label: "Aktif",
+                matches: product => product.isActive && product.isAvailable
+            },
+            {
+                id: "unavailable",
+                label: "Stokta Yok",
+                matches: product => product.isActive && !product.isAvailable
+            },
+            {
+                id: "archive",
+                label: "Arsiv",
+                matches: product => !product.isActive
+            }
+        ];
+
+        const selectedFilter = filters.find(filter => filter.id === state.productFilter) || filters[0];
+        const filterBar = document.createElement("div");
+        filterBar.className = "product-filters";
+
+        for (const filter of filters) {
+            const count = state.products.filter(filter.matches).length;
+            const filterButton = button(`${filter.label} (${count})`, `product-filter${selectedFilter.id === filter.id ? " active" : ""}`, () => {
+                state.productFilter = filter.id;
+                render(state);
+            });
+            filterButton.setAttribute("aria-pressed", selectedFilter.id === filter.id ? "true" : "false");
+            filterBar.appendChild(filterButton);
+        }
+
+        body.appendChild(filterBar);
+
+        const visibleProducts = state.products.filter(selectedFilter.matches);
+        if (visibleProducts.length === 0) {
+            body.appendChild(empty(`${selectedFilter.label} durumunda urun bulunmuyor.`));
+            return panel;
+        }
+
         const table = tableShell(["", "Sira", "Urun", "Kategori", "Fiyat", "Durum", "Stok", ""]);
-        for (const product of state.products) {
+        for (const product of visibleProducts) {
             const tr = document.createElement("tr");
             const imageCell = product.imageUrl
                 ? `<img class="product-list-image" src="${escapeHtml(product.imageUrl)}" alt="" />`
@@ -1304,6 +1603,15 @@
                     categoryId: product.categoryId,
                     name: product.name,
                     description: product.description || "",
+                    ingredients: product.ingredients || "",
+                    portionInfo: product.portionInfo || "",
+                    calories: product.calories == null ? "" : product.calories,
+                    allergenFlags: Number(product.allergenFlags || 0),
+                    containsAlcohol: Boolean(product.containsAlcohol),
+                    containsPork: Boolean(product.containsPork),
+                    isVegetarian: Boolean(product.isVegetarian),
+                    isVegan: Boolean(product.isVegan),
+                    servingTemperature: Number(product.servingTemperature || 0),
                     imageUrl: product.imageUrl || "",
                     imageFile: null,
                     imagePreviewUrl: "",
@@ -1315,13 +1623,19 @@
                 render(state);
             }));
 
-            actions.appendChild(button(product.isActive ? "Pasife Al" : "Aktife Al", product.isActive ? "button danger" : "button primary", () => {
-                setProductStatus(state, product.id, !product.isActive);
-            }));
+            if (product.isActive) {
+                actions.appendChild(button(product.isAvailable ? "Stokta Yok" : "Stokta Var", product.isAvailable ? "button warning" : "button primary", () => {
+                    setProductAvailability(state, product.id, !product.isAvailable);
+                }));
 
-            actions.appendChild(button(product.isAvailable ? "Stokta Yok" : "Stokta Var", product.isAvailable ? "button warning" : "button primary", () => {
-                setProductAvailability(state, product.id, !product.isAvailable);
-            }));
+                actions.appendChild(button("Menuden Kaldir", "button danger", () => {
+                    archiveProduct(state, product);
+                }));
+            } else {
+                actions.appendChild(button("Tekrar Aktiflestir", "button primary", () => {
+                    restoreProduct(state, product);
+                }));
+            }
 
             tr.appendChild(actions);
             table.querySelector("tbody").appendChild(tr);
@@ -1368,12 +1682,66 @@
         slug.disabled = true;
         body.appendChild(field("Slug", slug));
 
+        const colorGrid = document.createElement("div");
+        colorGrid.className = "settings-color-grid";
+        colorGrid.appendChild(field("Ana renk", input(state.tenantForm.primaryColor, value => state.tenantForm.primaryColor = value, "color")));
+        colorGrid.appendChild(field("Aksan rengi", input(state.tenantForm.accentColor, value => state.tenantForm.accentColor = value, "color")));
+        body.appendChild(colorGrid);
+
+        body.appendChild(brandingImageField(state, "logo", "Isletme logosu"));
+        body.appendChild(brandingImageField(state, "hero", "Menu kapak gorseli"));
+
         body.appendChild(field("Online siparis", select(state.tenantForm.isOrderingEnabled ? "true" : "false", [
             ["true", "Acik"],
             ["false", "Kapali"]
         ], value => state.tenantForm.isOrderingEnabled = value === "true")));
 
+        body.appendChild(field("Icerik ve alerjen bilgileri", select(state.tenantForm.showProductDetails ? "true" : "false", [
+            ["true", "Musteri menusunde goster"],
+            ["false", "Gizle"]
+        ], value => state.tenantForm.showProductDetails = value === "true")));
+
         body.appendChild(field("Masa oturumu (saat)", input(state.tenantForm.tableSessionHours, value => state.tenantForm.tableSessionHours = value, "number", "1")));
+
+        const hoursTitle = document.createElement("div");
+        hoursTitle.className = "form-section-title";
+        hoursTitle.innerHTML = "<strong>Calisma saatleri</strong><span class=\"muted\">Gece yarisini gecen saatler desteklenir.</span>";
+        body.appendChild(hoursTitle);
+
+        const dayLabels = ["Pazar", "Pazartesi", "Sali", "Carsamba", "Persembe", "Cuma", "Cumartesi"];
+        const hoursGrid = document.createElement("div");
+        hoursGrid.className = "business-hours-grid";
+
+        for (const hour of state.tenantForm.businessHours) {
+            const row = document.createElement("div");
+            row.className = "business-hour-row";
+
+            const enabledLabel = document.createElement("label");
+            enabledLabel.className = "business-day-toggle";
+            const enabled = document.createElement("input");
+            enabled.type = "checkbox";
+            enabled.checked = hour.isOpen;
+            enabled.addEventListener("change", () => {
+                hour.isOpen = enabled.checked;
+                render(state);
+            });
+            const dayName = document.createElement("strong");
+            dayName.textContent = dayLabels[hour.dayOfWeek];
+            enabledLabel.appendChild(enabled);
+            enabledLabel.appendChild(dayName);
+
+            const open = input(hour.openTime, value => hour.openTime = value, "time");
+            const close = input(hour.closeTime, value => hour.closeTime = value, "time");
+            open.disabled = !hour.isOpen;
+            close.disabled = !hour.isOpen;
+
+            row.appendChild(enabledLabel);
+            row.appendChild(open);
+            row.appendChild(close);
+            hoursGrid.appendChild(row);
+        }
+
+        body.appendChild(hoursGrid);
 
         const actions = document.createElement("div");
         actions.className = "form-actions";
@@ -1387,12 +1755,67 @@
         list.innerHTML = `
             <p><strong>Slug</strong> QR linklerinin parcasidir, bu yuzden simdilik kilitli.</p>
             <p><strong>Online siparis kapaliysa</strong> menu gorunur ama musteri sepete ekleyemez ve siparis gonderemez.</p>
+            <p><strong>Calisma saatleri disinda</strong> menu gorunur, siparis verme otomatik kapanir.</p>
             <p><strong>Masa oturumu</strong> QR ile acilan sayfanin kac saat geceri kalacagini belirler.</p>`;
         infoBody.appendChild(list);
 
         wrap.appendChild(panel);
         wrap.appendChild(info);
         return wrap;
+    }
+
+    function brandingImageField(state, imageType, labelText) {
+        const isLogo = imageType === "logo";
+        const fileKey = isLogo ? "logoFile" : "heroImageFile";
+        const previewKey = isLogo ? "logoPreviewUrl" : "heroImagePreviewUrl";
+        const urlKey = isLogo ? "logoUrl" : "heroImageUrl";
+        const wrapper = document.createElement("div");
+        wrapper.className = "branding-field";
+
+        const label = document.createElement("strong");
+        label.textContent = labelText;
+        wrapper.appendChild(label);
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/jpeg,image/png,image/webp";
+        fileInput.addEventListener("change", () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                state.error = "Gorsel JPEG, PNG veya WebP olmali ve 5 MB'i gecmemeli.";
+                render(state);
+                return;
+            }
+
+            if (state.tenantForm[previewKey]) URL.revokeObjectURL(state.tenantForm[previewKey]);
+            state.tenantForm[fileKey] = file;
+            state.tenantForm[previewKey] = URL.createObjectURL(file);
+            state.error = "";
+            render(state);
+        });
+        wrapper.appendChild(fileInput);
+
+        const previewUrl = state.tenantForm[previewKey] || state.tenantForm[urlKey];
+        if (previewUrl) {
+            const preview = document.createElement("div");
+            preview.className = `branding-preview ${isLogo ? "logo" : "hero"}`;
+            preview.innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(labelText)} onizleme" />`;
+
+            if (state.tenantForm[fileKey]) {
+                preview.appendChild(button("Secimi Kaldir", "button", () => {
+                    if (state.tenantForm[previewKey]) URL.revokeObjectURL(state.tenantForm[previewKey]);
+                    state.tenantForm[fileKey] = null;
+                    state.tenantForm[previewKey] = "";
+                    render(state);
+                }));
+            } else {
+                preview.appendChild(button("Gorseli Kaldir", "button danger", () => deleteTenantBrandingImage(state, imageType)));
+            }
+            wrapper.appendChild(preview);
+        }
+
+        return wrapper;
     }
 
     function renderUsers(state) {
@@ -1791,6 +2214,20 @@
         el.value = value || "";
         el.addEventListener("change", () => onChange(el.value));
         return el;
+    }
+
+    function checkboxOption(label, checked, onChange) {
+        const wrapper = document.createElement("label");
+        wrapper.className = "checkbox-option";
+        const el = document.createElement("input");
+        el.type = "checkbox";
+        el.checked = Boolean(checked);
+        el.addEventListener("change", () => onChange(el.checked));
+        const text = document.createElement("span");
+        text.textContent = label;
+        wrapper.appendChild(el);
+        wrapper.appendChild(text);
+        return wrapper;
     }
 
     function button(text, className, onClick) {

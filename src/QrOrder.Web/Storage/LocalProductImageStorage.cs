@@ -13,12 +13,11 @@ public sealed class LocalProductImageStorage : IProductImageStorage
             [".webp"] = "image/webp"
         };
 
-    private readonly string _webRootPath;
+    private readonly string _uploadsRoot;
 
-    public LocalProductImageStorage(IWebHostEnvironment environment)
+    public LocalProductImageStorage(IWebHostEnvironment environment, IConfiguration configuration)
     {
-        _webRootPath = environment.WebRootPath
-            ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        _uploadsRoot = ResolveUploadsRoot(environment, configuration);
     }
 
     public async Task<string> SaveAsync(
@@ -46,11 +45,10 @@ public sealed class LocalProductImageStorage : IProductImageStorage
             throw new InvalidDataException("Image content does not match its file type.");
 
         var relativeDirectory = Path.Combine(
-            "uploads",
             "products",
             tenantId.ToString("N"),
             productId.ToString("N"));
-        var directory = Path.Combine(_webRootPath, relativeDirectory);
+        var directory = Path.Combine(_uploadsRoot, relativeDirectory);
         Directory.CreateDirectory(directory);
 
         var storedFileName = $"{Guid.NewGuid():N}{NormalizeExtension(extension)}";
@@ -66,7 +64,7 @@ public sealed class LocalProductImageStorage : IProductImageStorage
             useAsync: true);
         await buffer.CopyToAsync(output, cancellationToken);
 
-        return "/" + Path.Combine(relativeDirectory, storedFileName).Replace('\\', '/');
+        return "/uploads/" + Path.Combine(relativeDirectory, storedFileName).Replace('\\', '/');
     }
 
     public Task DeleteAsync(string? imageUrl, CancellationToken cancellationToken = default)
@@ -77,9 +75,9 @@ public sealed class LocalProductImageStorage : IProductImageStorage
             return Task.CompletedTask;
         }
 
-        var relativePath = imageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var fullPath = Path.GetFullPath(Path.Combine(_webRootPath, relativePath));
-        var uploadsRoot = Path.GetFullPath(Path.Combine(_webRootPath, "uploads", "products"));
+        var relativePath = imageUrl["/uploads/".Length..].Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.Combine(_uploadsRoot, relativePath));
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_uploadsRoot, "products"));
 
         if (!fullPath.StartsWith(uploadsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             return Task.CompletedTask;
@@ -92,6 +90,16 @@ public sealed class LocalProductImageStorage : IProductImageStorage
 
     private static string NormalizeExtension(string extension) =>
         extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) ? ".jpg" : extension;
+
+    private static string ResolveUploadsRoot(IWebHostEnvironment environment, IConfiguration configuration)
+    {
+        var configuredPath = configuration["Storage:UploadsPath"];
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+            return Path.GetFullPath(configuredPath);
+
+        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        return Path.Combine(webRoot, "uploads");
+    }
 
     private static bool HasValidSignature(byte[] bytes, int length, string contentType)
     {

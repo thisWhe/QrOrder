@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using QrOrder.Application.Common;
 using QrOrder.Infrastructure.Auth;
 using QrOrder.Infrastructure.Data;
@@ -35,6 +36,7 @@ namespace QrOrder.Web.Controllers
         public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
         [HttpPost("login")]
+        [EnableRateLimiting("staff-login")]
         public async Task<IActionResult> Login(LoginRequest req)
         {
             var tenant = await _db.Tenants.SingleOrDefaultAsync(t => t.Slug == req.TenantSlug && t.IsActive);
@@ -45,8 +47,20 @@ namespace QrOrder.Web.Controllers
             var user = await _userManager.FindByEmailAsync(req.Email.Trim());
             if (user == null || user.TenantId != tenant.Id) return Unauthorized();
 
+            if (!user.LockoutEnabled)
+                await _userManager.SetLockoutEnabledAsync(user, true);
+
+            if (await _userManager.IsLockedOutAsync(user))
+                return StatusCode(StatusCodes.Status429TooManyRequests, "Account is temporarily locked.");
+
             var ok = await _userManager.CheckPasswordAsync(user, req.Password);
-            if (!ok) return Unauthorized();
+            if (!ok)
+            {
+                await _userManager.AccessFailedAsync(user);
+                return Unauthorized();
+            }
+
+            await _userManager.ResetAccessFailedCountAsync(user);
 
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwt.Create(user, roles);
