@@ -49,9 +49,7 @@ try {
         "scripts\backup\Restore-QrOrder.ps1",
         "scripts\backup\Test-QrOrderBackupRestore.ps1",
         "scripts\security\Test-GitHubSafety.ps1",
-        "docs\PRODUCTION-KURULUM.md",
-        "docs\PILOT-KABUL-VE-TESLIM.md",
-        "docs\PILOT-ISLETME-KURULUMU.md"
+        "docs\PRODUCTION-KURULUM.md"
     )
     foreach ($file in $requiredFiles) {
         Assert-Condition (Test-Path -LiteralPath $file -PathType Leaf) "Required file is missing: $file"

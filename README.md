@@ -78,8 +78,6 @@ Demo kullanicilar yalnizca `Seed:DemoData=true` oldugunda gelistirme ortaminda o
 
 - [Production kurulumu](docs/PRODUCTION-KURULUM.md)
 - [Yedekleme ve geri yukleme](docs/YEDEKLEME-VE-GERI-YUKLEME.md)
-- [Pilot isletme kurulumu](docs/PILOT-ISLETME-KURULUMU.md)
-- [Pilot kabul ve teslim plani](docs/PILOT-KABUL-VE-TESLIM.md)
 
 Pilot on kontrolu:
 

@@ -47,9 +47,6 @@ try {
     Copy-Item deploy\production.env.example (Join-Path $packageRoot "production.env.example")
     Copy-Item docs\PRODUCTION-KURULUM.md (Join-Path $packageRoot "PRODUCTION-KURULUM.md")
     Copy-Item docs\YEDEKLEME-VE-GERI-YUKLEME.md (Join-Path $packageRoot "YEDEKLEME-VE-GERI-YUKLEME.md")
-    Copy-Item docs\PILOT-KABUL-VE-TESLIM.md (Join-Path $packageRoot "PILOT-KABUL-VE-TESLIM.md")
-    Copy-Item docs\PILOT-ISLETME-KURULUMU.md (Join-Path $packageRoot "PILOT-ISLETME-KURULUMU.md")
-    Copy-Item docs\PILOT-GIZLILIK-VE-KVKK-TASLAGI.md (Join-Path $packageRoot "PILOT-GIZLILIK-VE-KVKK-TASLAGI.md")
 
     $operationsPath = Join-Path $packageRoot "operations"
     New-Item -ItemType Directory -Path $operationsPath -Force | Out-Null
