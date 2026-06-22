@@ -57,29 +57,7 @@ Musteri menu adresleri isletme ve masa icin uretilen QR baglantisindan acilir:
 ```text
 http://localhost:5140/v/{isletme-slug}/t/{masa-kodu}
 ```
-
-## Lokal Kurulum
-
-1. `src/QrOrder.Web/appsettings.Development.json` dosyasini olusturun.
-2. Lokal MSSQL baglantisini ve en az 48 karakterlik gelistirme JWT anahtarini girin.
-3. Uygulamayi calistirin:
-
-```powershell
-dotnet run --project src\QrOrder.Web\QrOrder.Web.csproj --launch-profile http
-```
-
-Development ortaminda migration ve istege bagli demo seed acilista uygulanabilir. Lokal ayar dosyasi Git tarafindan takip edilmez.
-
-## Demo Ortami
-
-Demo kullanicilar yalnizca `Seed:DemoData=true` oldugunda gelistirme ortaminda olusturulur. Production yapilandirmasi demo seed ile calismayi engeller. Demo hesap bilgileri kaynak kodda gercek musteri hesabi olarak kullanilmamalidir.
-
-## Production ve Pilot
-
-- [Production kurulumu](docs/PRODUCTION-KURULUM.md)
-- [Yedekleme ve geri yukleme](docs/YEDEKLEME-VE-GERI-YUKLEME.md)
-
-Pilot on kontrolu:
+vds ile test test edilmiştir sorunsuz çalışıyor
 
 
 
