@@ -59,7 +59,29 @@ http://localhost:5140/v/{isletme-slug}/t/{masa-kodu}
 ```
 vds ile test test edilmiştir sorunsuz çalışıyor
 
+
+Açılan QR Menü Sayfası:
 <img width="363" height="754" alt="image" src="https://github.com/user-attachments/assets/5cbd6755-0221-4125-b13b-fad2fdd68fd4" />
+<img width="349" height="772" alt="image" src="https://github.com/user-attachments/assets/0c877591-4b33-40fd-bd6a-cb86f35909b9" />
+<img width="358" height="780" alt="image" src="https://github.com/user-attachments/assets/ee0ca39f-2e16-4a23-98fd-19e72438499b" />
+<img width="366" height="676" alt="image" src="https://github.com/user-attachments/assets/8de5b2ac-ec3b-4148-bfdd-fedf7c9eda86" />
+
+
+Mutfak Ekranı:
+<img width="1919" height="890" alt="image" src="https://github.com/user-attachments/assets/71990b1b-09b4-4450-8528-3996cff0f60a" />
+
+
+Servis Ekranı:
+<img width="1919" height="875" alt="image" src="https://github.com/user-attachments/assets/8056931f-ac99-4318-8daf-bf853e5bd87f" />
+
+
+İşletme Admin paneli:
+<img width="1918" height="880" alt="image" src="https://github.com/user-attachments/assets/bf524eb0-7db9-48ef-8a5d-792f8e9178a6" />
+
+
+
+
+
 
 
 
