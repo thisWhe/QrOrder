@@ -59,6 +59,7 @@ http://localhost:5140/v/{isletme-slug}/t/{masa-kodu}
 ```
 vds ile test test edilmiştir sorunsuz çalışıyor
 
-<img width="528" height="178" alt="image" src="https://github.com/user-attachments/assets/b25fe08f-13ac-4a01-8745-f216dd6715ad" />
+<img width="363" height="754" alt="image" src="https://github.com/user-attachments/assets/5cbd6755-0221-4125-b13b-fad2fdd68fd4" />
+
 
 
