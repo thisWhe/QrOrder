@@ -85,6 +85,21 @@ Servis Ekranı:
 
 <img width="1918" height="880" alt="image" src="https://github.com/user-attachments/assets/bf524eb0-7db9-48ef-8a5d-792f8e9178a6" />
 
+<img width="1901" height="881" alt="image" src="https://github.com/user-attachments/assets/77713f09-9f42-4735-a9c8-fc52ca7e409b" />
+
+<img width="1898" height="885" alt="image" src="https://github.com/user-attachments/assets/74946d4e-27ec-4150-a4bb-c7dfeb40df9d" />
+
+<img width="1898" height="873" alt="image" src="https://github.com/user-attachments/assets/cac1abf2-84b7-4294-afab-5add497b8b3e" />
+
+<img width="1898" height="885" alt="image" src="https://github.com/user-attachments/assets/2ef67a32-5161-4042-ab31-28520547d5ad" />
+
+
+
+Super Admin Paneli:
+
+<img width="1911" height="872" alt="image" src="https://github.com/user-attachments/assets/d30ea954-1d56-410b-a34b-2e76a3ba7d16" />
+
+
 
 
 
